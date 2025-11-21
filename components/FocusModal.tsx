@@ -45,8 +45,8 @@ const FocusModal: React.FC<FocusModalProps> = ({ isOpen, onClose }) => {
   };
 
   // SVG config
-  // Using viewBox 0 0 200 200. Center is 100, 100.
-  const radius = 85;
+  // Reduced radius to 80 to ensure it fits within 200x200 with strokeWidth=8
+  const radius = 80;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - ((DEFAULT_TIME - timeLeft) / DEFAULT_TIME) * circumference;
 
@@ -62,7 +62,7 @@ const FocusModal: React.FC<FocusModalProps> = ({ isOpen, onClose }) => {
 
         {/* Timer Viz */}
         <div className="relative flex items-center justify-center mb-8 w-64 h-64">
-          <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 200 200">
+          <svg className="transform -rotate-90 w-full h-full overflow-visible" viewBox="0 0 200 200">
             {/* Track */}
             <circle
               cx="100" cy="100" r={radius}

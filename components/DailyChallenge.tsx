@@ -21,9 +21,9 @@ const DailyChallenge: React.FC = () => {
   if (!isVisible) return null;
 
   return (
-    // Moved top from 4.5rem to 6.5rem (md: 4.5rem) to clear mobile nav
-    <div className={`fixed top-[6.5rem] md:top-32 right-4 md:right-16 z-[45] transition-all duration-700 transform ${isCompleted ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'}`}>
-      <div className="bg-glass/80 backdrop-blur-xl border border-white/20 rounded-2xl p-3 md:p-4 max-w-[160px] md:max-w-xs shadow-[0_8px_32px_rgba(0,0,0,0.3)] hover:bg-glass/90 transition-colors group relative overflow-hidden">
+    // Optimized position for mobile: Top 100px to clear header, Right 10px
+    <div className={`fixed top-[100px] md:top-32 right-3 md:right-16 z-[45] transition-all duration-700 transform ${isCompleted ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'}`}>
+      <div className="bg-glass/80 backdrop-blur-xl border border-white/20 rounded-2xl p-3 md:p-4 max-w-[150px] md:max-w-xs shadow-[0_8px_32px_rgba(0,0,0,0.3)] hover:bg-glass/90 transition-colors group relative overflow-hidden">
         {/* Shine effect */}
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-accent/50 to-transparent opacity-50"></div>
         

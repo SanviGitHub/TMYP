@@ -50,13 +50,13 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     if (materialRef.current) {
       const newColor = new THREE.Color(moodColor);
       gsap.to(materialRef.current.uniforms.uColor.value, {
-        r: newColor.r, g: newColor.g, b: newColor.b, duration: 1.5, ease: "power3.out"
+        r: newColor.r, g: newColor.g, b: newColor.b, duration: 2.0, ease: "power2.inOut"
       });
     }
     if (pulseRingRef.current) {
        const ringMat = pulseRingRef.current.material as THREE.MeshBasicMaterial;
        const newColor = new THREE.Color(moodColor);
-       gsap.to(ringMat.color, { r: newColor.r, g: newColor.g, b: newColor.b, duration: 1.5 });
+       gsap.to(ringMat.color, { r: newColor.r, g: newColor.g, b: newColor.b, duration: 2.0 });
     }
   }, [moodColor]);
 
@@ -69,18 +69,19 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     setIsMobileState(isMobile);
     
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0b0c15, isMobile ? 0.02 : 0.008); 
+    // Niebla más densa en móvil para ocultar bordes, sutil en PC
+    scene.fog = new THREE.FogExp2(0x0b0c15, isMobile ? 0.03 : 0.01); 
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
     
     const renderer = new THREE.WebGLRenderer({ 
         alpha: true, 
-        antialias: !isMobile, // Optimización móvil
+        antialias: !isMobile, // Optimización: Sin antialias en móvil para más FPS
         powerPreference: "high-performance",
     });
     
     renderer.setSize(width, height);
-    renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2));
     
     while(containerRef.current.firstChild) {
       containerRef.current.removeChild(containerRef.current.firstChild);
@@ -93,7 +94,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     scene.add(mainGroup);
 
     // --- 1. The Bola (Sphere) ---
-    const detail = isMobile ? 2 : 4; // Less detail on mobile
+    const detail = isMobile ? 1 : 4; // Menos polígonos en móvil
     const geo = new THREE.IcosahedronGeometry(1.8, detail * 5);
     
     const mat = new THREE.ShaderMaterial({
@@ -112,76 +113,93 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     const sphere = new THREE.Mesh(geo, mat);
     mainGroup.add(sphere);
 
-    // --- 2. Pulse Ring (Saturno) - SOLO PC ---
+    // --- 2. Pulse Ring (Saturno) - SOLO PC o Tablet Grande ---
+    // En móvil se oculta para limpiar la interfaz y mejorar rendimiento
     if (!isMobile) {
-        const ringGeo = new THREE.TorusGeometry(3.5, 0.02, 16, 100);
+        const ringGeo = new THREE.TorusGeometry(3.5, 0.02, 32, 100);
         const ringMat = new THREE.MeshBasicMaterial({ 
             color: new THREE.Color(moodColor), 
             transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending
         });
         const pulseRing = new THREE.Mesh(ringGeo, ringMat);
-        pulseRing.rotation.x = Math.PI / 2; // Flat like Saturn ring initially
+        pulseRing.rotation.x = Math.PI / 2; 
         pulseRingRef.current = pulseRing;
         mainGroup.add(pulseRing);
     }
 
     // --- 3. Particle Systems (Dust & Stars) ---
     
-    // SYSTEM A: DUST (Background noise)
-    const dustCount = isMobile ? 200 : 800;
+    // SYSTEM A: DUST (Polvo Cósmico - Muy pequeñas y muchas)
+    const dustCount = isMobile ? 150 : 600;
     const dustGeo = new THREE.BufferGeometry();
     const dustPos = [];
     for(let i=0; i<dustCount; i++) {
-        const x = (Math.random() - 0.5) * 60;
-        const y = (Math.random() - 0.5) * 60;
-        const z = (Math.random() - 0.5) * 60;
+        const x = (Math.random() - 0.5) * 50;
+        const y = (Math.random() - 0.5) * 50;
+        const z = (Math.random() - 0.5) * 50;
         dustPos.push(x, y, z);
     }
     dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3));
     const dustMat = new THREE.PointsMaterial({
-        color: 0xffffff, size: 0.1, transparent: true, opacity: 0.3
+        color: 0xffffff, 
+        size: 0.05, // MUY PEQUEÑAS (Req usuario)
+        transparent: true, 
+        opacity: 0.2
     });
     const dust = new THREE.Points(dustGeo, dustMat);
     dustRef.current = dust;
     scene.add(dust);
 
-    // SYSTEM B: STARS (Twinkling, larger)
-    const starCount = isMobile ? 50 : 150;
+    // SYSTEM B: STARS (Estrellas - Brillantes y Centelleantes)
+    const starCount = isMobile ? 40 : 120;
     const starGeo = new THREE.BufferGeometry();
     const starPos = [];
     const starSizes = [];
     for(let i=0; i<starCount; i++) {
-        const r = 15 + Math.random() * 30;
+        // Distribución esférica amplia
+        const r = 10 + Math.random() * 30;
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos(2 * Math.random() - 1);
         const x = r * Math.sin(phi) * Math.cos(theta);
         const y = r * Math.sin(phi) * Math.sin(theta);
         const z = r * Math.cos(phi);
         starPos.push(x, y, z);
-        starSizes.push(Math.random() * 1.5);
+        starSizes.push(0.5 + Math.random() * 1.0); // Tamaño variable
     }
     starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
     starGeo.setAttribute('size', new THREE.Float32BufferAttribute(starSizes, 1));
 
+    // Shader para estrellas (Efecto Twinkle/Destello)
     const starShaderMat = new THREE.ShaderMaterial({
         uniforms: { uTime: { value: 0 } },
         vertexShader: `
-            attribute float size; varying float vAlpha; uniform float uTime;
+            attribute float size; 
+            varying float vAlpha; 
+            uniform float uTime;
             void main() {
                 vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
                 gl_Position = projectionMatrix * mvPosition;
-                float twinkle = 0.5 + 0.5 * sin(uTime * 3.0 + position.x);
+                
+                // Centelleo basado en posición y tiempo
+                float twinkle = 0.6 + 0.4 * sin(uTime * 2.0 + position.x * 10.0);
                 vAlpha = twinkle;
-                gl_PointSize = size * (300.0 / -mvPosition.z);
+                
+                // Tamaño atenúa con distancia
+                gl_PointSize = size * (200.0 / -mvPosition.z);
             }
         `,
         fragmentShader: `
-            varying float vAlpha; void main() {
+            varying float vAlpha; 
+            void main() {
+                // Forma circular suave
                 vec2 xy = gl_PointCoord.xy - vec2(0.5);
                 float dist = length(xy);
                 if(dist > 0.5) discard;
+                
+                // Núcleo brillante
                 float glow = 1.0 - (dist * 2.0);
-                glow = pow(glow, 2.0);
+                glow = pow(glow, 3.0); 
+                
                 gl_FragColor = vec4(1.0, 1.0, 1.0, vAlpha * glow); 
             }
         `,
@@ -192,7 +210,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     starsRef.current = stars;
     scene.add(stars);
 
-    // Camera
+    // Camera init
     camera.position.z = 6;
 
     const clock = new THREE.Clock();
@@ -212,58 +230,56 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
       mat.uniforms.uTalk.value += (targetTalk - mat.uniforms.uTalk.value) * 0.15;
 
       // 1. MAIN SPHERE BEHAVIOR
-      if (zen) {
-          // ZEN MODE: Planet Mode (Tilted Axis Rotation)
-          if (mainGroupRef.current) {
-              // Tilt axis
+      if (mainGroupRef.current) {
+          // Floating movement
+          mainGroupRef.current.position.y = Math.sin(t * 0.5) * 0.1;
+          
+          if (zen) {
+              // ZEN MODE: Rotación lenta y constante en eje inclinado
               mainGroupRef.current.rotation.z = THREE.MathUtils.lerp(mainGroupRef.current.rotation.z, -0.4, 0.02); 
-              // Spin
-              mainGroupRef.current.rotation.y += 0.005;
-          }
-          // Make sphere pulse slower
-          mat.opacity += (0.8 - mat.opacity) * 0.05;
-      } else {
-          // NORMAL MODE: Float upright
-          if (mainGroupRef.current) {
-              mainGroupRef.current.rotation.z = THREE.MathUtils.lerp(mainGroupRef.current.rotation.z, 0, 0.05);
               mainGroupRef.current.rotation.y += 0.002;
-          }
-          if (isThinkingRef.current) {
-              sphere.rotation.y += 0.1;
-              mat.opacity = 0.8 + Math.sin(t * 10.0) * 0.1;
           } else {
-              sphere.rotation.y = t * 0.1;
-              sphere.rotation.x = Math.sin(t * 0.5) * 0.1;
-              mat.opacity += (0.6 - mat.opacity) * 0.05;
+              // NORMAL MODE: Responde al pensamiento
+              mainGroupRef.current.rotation.z = THREE.MathUtils.lerp(mainGroupRef.current.rotation.z, 0, 0.05);
+              
+              if (isThinkingRef.current) {
+                  sphere.rotation.y += 0.1;
+                  mat.opacity = 0.8 + Math.sin(t * 10.0) * 0.1;
+              } else {
+                  sphere.rotation.y = t * 0.1;
+                  sphere.rotation.x = Math.sin(t * 0.5) * 0.1;
+                  mat.opacity += (0.6 - mat.opacity) * 0.05;
+              }
           }
       }
 
       // 2. RING BEHAVIOR (PC Only)
       if (pulseRingRef.current) {
-          if (zen) {
-             // In Zen, ring aligns with planet tilt naturally via group
-             // Just add subtle wobble
-             pulseRingRef.current.scale.setScalar(1.2 + Math.sin(t)*0.05);
-          } else {
-             pulseRingRef.current.rotation.x = Math.PI / 2 + Math.sin(t * 0.3) * 0.2;
-             pulseRingRef.current.scale.setScalar(1 + Math.sin(t * 2.0) * 0.02);
-          }
+         pulseRingRef.current.rotation.x = Math.PI / 2 + Math.sin(t * 0.3) * 0.15;
+         pulseRingRef.current.scale.setScalar(1 + Math.sin(t * 1.5) * 0.03);
       }
 
-      // 3. STARS BEHAVIOR
+      // 3. STARS & DUST ANIMATION
       if (starsRef.current && dustRef.current) {
-          const speed = zen ? 0.05 : 0.01; // Faster in Zen
-          starsRef.current.rotation.y += speed;
-          dustRef.current.rotation.y += speed * 0.5;
+          // Rotación lenta del universo
+          const speed = zen ? 0.02 : 0.005; 
+          starsRef.current.rotation.y -= speed;
+          dustRef.current.rotation.y -= speed * 0.5;
+          
+          // Movimiento vertical sutil para efecto de flotación
+          dustRef.current.position.y = Math.sin(t * 0.2) * 0.5;
       }
 
-      // 4. CAMERA BEHAVIOR
-      const targetZ = isMobile ? 7.0 : 6.0;
-      const zenZ = targetZ + (isMobile ? 2.0 : 3.0); // Move back in Zen
+      // 4. CAMERA BEHAVIOR (Responsive)
+      // En móvil la cámara se aleja un poco más para que la bola no ocupe todo
+      const targetZ = isMobile ? 7.5 : 6.0;
+      const zenZ = targetZ + (isMobile ? 1.5 : 3.0); 
       const finalZ = zen ? zenZ : targetZ;
       
       camera.position.z += (finalZ - camera.position.z) * 0.02;
-      camera.position.y = Math.sin(t * 0.2) * 0.2;
+      
+      // Mouse parallax simple podría ir aquí si se desea, 
+      // pero para móvil es mejor dejarlo estático o con giroscopio (no implementado para simplicidad)
 
       renderer.render(scene, camera);
     };
@@ -275,13 +291,14 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
       const h = window.innerHeight;
       const mobile = w < 768;
       setIsMobileState(mobile);
+      
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
       
       if (mobile) {
-        sphere.position.y = 0.5; // Move up on mobile
-        if (pulseRingRef.current) pulseRingRef.current.visible = false;
+        sphere.position.y = 0.8; // Subir bola en móvil para dejar espacio al chat
+        if (pulseRingRef.current) pulseRingRef.current.visible = false; // Ocultar anillo en móvil
       } else {
         sphere.position.y = 0;
         if (pulseRingRef.current) pulseRingRef.current.visible = true;
@@ -289,7 +306,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     };
     
     window.addEventListener('resize', handleResize);
-    handleResize();
+    handleResize(); // Init
 
     return () => {
       window.removeEventListener('resize', handleResize);

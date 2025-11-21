@@ -99,9 +99,11 @@ const App: React.FC = () => {
   };
 
   const handleMoodChange = (mood: MoodOption) => {
-    // Trigger Flash Effect
+    // 1. Activar Flash Effect
     setMoodTransitionColor(mood.color);
-    setTimeout(() => setMoodTransitionColor(null), 700);
+    
+    // 2. Apagar Flash después de la transición
+    setTimeout(() => setMoodTransitionColor(null), 600); // Duración del flash
 
     setCurrentMood(mood);
     setActiveModal(null);
@@ -175,7 +177,6 @@ const App: React.FC = () => {
       console.error(error);
       setIsThinking(false);
       setIsTalking(false); 
-      // This path is rare due to aiService fallback, but just in case:
       addMessageWithTyping("Me desconecté un segundo del universo. ¿Me lo repetís? 😅", 'assistant');
     }
   };
@@ -204,12 +205,12 @@ const App: React.FC = () => {
       <AmbientAurora color={currentMood.threeColor} />
       <div className="fixed inset-0 bg-gradient-to-b from-[#0b0c15]/20 via-transparent to-[#0b0c15]/60 z-0 pointer-events-none" />
       
-      {/* MOOD FLASH TRANSITION */}
+      {/* MOOD FLASH TRANSITION: Una capa que se inunda de color y se desvanece */}
       <div 
-        className="fixed inset-0 z-[100] pointer-events-none transition-opacity duration-700 ease-out mix-blend-hard-light"
+        className="fixed inset-0 z-[150] pointer-events-none transition-opacity duration-700 ease-out mix-blend-screen"
         style={{ 
             backgroundColor: moodTransitionColor || 'transparent',
-            opacity: moodTransitionColor ? 0.6 : 0
+            opacity: moodTransitionColor ? 0.4 : 0
         }}
       />
 
@@ -256,8 +257,8 @@ const App: React.FC = () => {
                 : 'hidden md:flex justify-end pb-10 md:pb-24 opacity-100'}
         `}>
            <div className={`
-              bg-black/40 backdrop-blur-md px-6 py-4 md:px-12 md:py-8 rounded-3xl border border-white/10 
-              text-white/90 font-light text-xs md:text-xl tracking-wide shadow-2xl animate-fade-in 
+              bg-black/40 backdrop-blur-md px-5 py-3 md:px-12 md:py-8 rounded-3xl border border-white/10 
+              text-white/90 font-light text-[0.8rem] md:text-xl tracking-wide shadow-2xl animate-fade-in 
               text-center max-w-xl mx-auto transition-all duration-500
               ${showTutorial ? 'opacity-0' : 'opacity-100'}
               ${zenMode ? 'scale-105' : 'scale-100'}
