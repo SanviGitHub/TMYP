@@ -1,69 +1,85 @@
-import React, { useEffect, useRef } from 'react';
+
+import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import gsap from 'gsap';
 
 interface TheBolaProps {
   isTalking: boolean;
+  isThinking?: boolean;
   moodColor: string;
+  isZen?: boolean;
 }
 
-const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
+const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZen }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const materialRef = useRef<THREE.ShaderMaterial | null>(null);
-  
-  // Shaders (Optimized: same visual logic, standard precision)
+  const pulseRingRef = useRef<THREE.Mesh | null>(null);
+  const starsRef = useRef<THREE.Points | null>(null);
+  const dustRef = useRef<THREE.Points | null>(null);
+  const mainGroupRef = useRef<THREE.Group | null>(null);
+
+  const [isMobileState, setIsMobileState] = useState(false);
+
+  // Shader para la bola principal (Holográfico)
   const vertexShader = `
     varying vec2 vUv; varying vec3 vNormal; uniform float uTime; uniform float uTalk; 
-    void main() { vUv = uv; vNormal = normal; float breath = sin(uTime * 0.5) * 0.05; float speech = sin(position.y * 10.0 + uTime * 15.0) * uTalk * 0.1; vec3 newPos = position + normal * (breath + speech); gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0); }
+    void main() { 
+      vUv = uv; 
+      vNormal = normal; 
+      // Deformación orgánica basada en voz y tiempo
+      float breath = sin(uTime * 0.5) * 0.03; 
+      float speech = sin(position.y * 8.0 + uTime * 20.0) * uTalk * 0.08; 
+      vec3 newPos = position + normal * (breath + speech); 
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0); 
+    }
   `;
   
   const fragmentShader = `
-    varying vec3 vNormal; uniform vec3 uColor; void main() { float intensity = pow(0.6 - dot(vNormal, vec3(0, 0, 1.0)), 2.0); gl_FragColor = vec4(uColor, 1.0) * intensity * 2.0; }
+    varying vec3 vNormal; uniform vec3 uColor; uniform float uTime;
+    void main() { 
+      // Efecto fresnel para borde brillante
+      float intensity = pow(0.65 - dot(vNormal, vec3(0, 0, 1.0)), 2.5); 
+      // Pulso interno sutil
+      float pulse = 0.8 + 0.2 * sin(uTime * 2.0);
+      gl_FragColor = vec4(uColor, 1.0) * intensity * pulse * 2.5; 
+    }
   `;
 
-  // Effect to handle color transition when mood changes
+  // Control de Transición de Color (GSAP)
   useEffect(() => {
     if (materialRef.current) {
       const newColor = new THREE.Color(moodColor);
       gsap.to(materialRef.current.uniforms.uColor.value, {
-        r: newColor.r,
-        g: newColor.g,
-        b: newColor.b,
-        duration: 2, // Smooth 2 second transition
-        ease: "power2.inOut"
+        r: newColor.r, g: newColor.g, b: newColor.b, duration: 1.5, ease: "power3.out"
       });
+    }
+    if (pulseRingRef.current) {
+       const ringMat = pulseRingRef.current.material as THREE.MeshBasicMaterial;
+       const newColor = new THREE.Color(moodColor);
+       gsap.to(ringMat.color, { r: newColor.r, g: newColor.g, b: newColor.b, duration: 1.5 });
     }
   }, [moodColor]);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // --- Scene Setup ---
     const width = window.innerWidth;
     const height = window.innerHeight;
     const isMobile = width < 768;
+    setIsMobileState(isMobile);
     
     const scene = new THREE.Scene();
-    // Fog slightly reduced for performance, still adds depth
-    scene.fog = new THREE.FogExp2(0x050505, 0.02);
+    scene.fog = new THREE.FogExp2(0x0b0c15, isMobile ? 0.02 : 0.008); 
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
     
-    // PERFORMANCE CRITICAL: 
-    // 1. Disable antialias on mobile (huge FPS boost)
-    // 2. Use mediump precision on mobile shaders
     const renderer = new THREE.WebGLRenderer({ 
         alpha: true, 
-        antialias: !isMobile, 
+        antialias: !isMobile, // Optimización móvil
         powerPreference: "high-performance",
-        precision: isMobile ? "mediump" : "highp",
-        stencil: false, // Disable stencil buffer if not used
-        depth: true
     });
     
     renderer.setSize(width, height);
-    // CRITICAL: Max pixel ratio of 1 on mobile prevents rendering at 3x resolution on new phones
-    // This allows us to have high geometry detail without lag
     renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     
     while(containerRef.current.firstChild) {
@@ -71,178 +87,230 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
     }
     containerRef.current.appendChild(renderer.domElement);
 
-    // --- The Bola (Sphere) ---
-    // RESTORED HIGH DETAIL: 
-    // Returning to higher detail (10 for mobile, 20 for desktop) to restore the "dense wireframe" look.
-    // The lag is mitigated by the renderer settings above (pixelRatio 1).
-    const detail = isMobile ? 10 : 20; 
-    const geo = new THREE.IcosahedronGeometry(1.8, detail);
+    // --- GROUP FOR ROTATION ---
+    const mainGroup = new THREE.Group();
+    mainGroupRef.current = mainGroup;
+    scene.add(mainGroup);
+
+    // --- 1. The Bola (Sphere) ---
+    const detail = isMobile ? 2 : 4; // Less detail on mobile
+    const geo = new THREE.IcosahedronGeometry(1.8, detail * 5);
     
     const mat = new THREE.ShaderMaterial({
-      vertexShader,
-      fragmentShader,
+      vertexShader, fragmentShader,
       uniforms: { 
         uTime: { value: 0 }, 
         uTalk: { value: 0 }, 
-        uColor: { value: new THREE.Color(moodColor) } // Init with current mood
+        uColor: { value: new THREE.Color(moodColor) }
       },
-      wireframe: true, 
-      transparent: true, 
-      opacity: 0.5,
-      depthWrite: false, // Optimization for transparent objects
-      blending: THREE.AdditiveBlending
+      wireframe: true, transparent: true, opacity: 0.6,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide
     });
     
     materialRef.current = mat;
-
     const sphere = new THREE.Mesh(geo, mat);
-    scene.add(sphere);
+    mainGroup.add(sphere);
 
-    // --- Background Particles (The Universe) ---
-    const pGeo = new THREE.BufferGeometry();
-    // Restored particle count slightly for better visuals
-    const pCount = isMobile ? 150 : 600; 
-    const pPos = [];
-    const pSizes = [];
-
-    for(let i=0; i<pCount; i++) {
-        pPos.push((Math.random()-0.5)*25, (Math.random()-0.5)*25, (Math.random()-0.5)*20);
-        pSizes.push(Math.random());
+    // --- 2. Pulse Ring (Saturno) - SOLO PC ---
+    if (!isMobile) {
+        const ringGeo = new THREE.TorusGeometry(3.5, 0.02, 16, 100);
+        const ringMat = new THREE.MeshBasicMaterial({ 
+            color: new THREE.Color(moodColor), 
+            transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending
+        });
+        const pulseRing = new THREE.Mesh(ringGeo, ringMat);
+        pulseRing.rotation.x = Math.PI / 2; // Flat like Saturn ring initially
+        pulseRingRef.current = pulseRing;
+        mainGroup.add(pulseRing);
     }
-    
-    pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
-    pGeo.setAttribute('size', new THREE.Float32BufferAttribute(pSizes, 1));
 
-    const pMat = new THREE.PointsMaterial({ 
-        size: 0.04, 
-        color: 0xa855f7, 
-        transparent: true, 
-        opacity: 0.6,
-        sizeAttenuation: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
+    // --- 3. Particle Systems (Dust & Stars) ---
     
-    const stars = new THREE.Points(pGeo, pMat);
+    // SYSTEM A: DUST (Background noise)
+    const dustCount = isMobile ? 200 : 800;
+    const dustGeo = new THREE.BufferGeometry();
+    const dustPos = [];
+    for(let i=0; i<dustCount; i++) {
+        const x = (Math.random() - 0.5) * 60;
+        const y = (Math.random() - 0.5) * 60;
+        const z = (Math.random() - 0.5) * 60;
+        dustPos.push(x, y, z);
+    }
+    dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3));
+    const dustMat = new THREE.PointsMaterial({
+        color: 0xffffff, size: 0.1, transparent: true, opacity: 0.3
+    });
+    const dust = new THREE.Points(dustGeo, dustMat);
+    dustRef.current = dust;
+    scene.add(dust);
+
+    // SYSTEM B: STARS (Twinkling, larger)
+    const starCount = isMobile ? 50 : 150;
+    const starGeo = new THREE.BufferGeometry();
+    const starPos = [];
+    const starSizes = [];
+    for(let i=0; i<starCount; i++) {
+        const r = 15 + Math.random() * 30;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const x = r * Math.sin(phi) * Math.cos(theta);
+        const y = r * Math.sin(phi) * Math.sin(theta);
+        const z = r * Math.cos(phi);
+        starPos.push(x, y, z);
+        starSizes.push(Math.random() * 1.5);
+    }
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+    starGeo.setAttribute('size', new THREE.Float32BufferAttribute(starSizes, 1));
+
+    const starShaderMat = new THREE.ShaderMaterial({
+        uniforms: { uTime: { value: 0 } },
+        vertexShader: `
+            attribute float size; varying float vAlpha; uniform float uTime;
+            void main() {
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                float twinkle = 0.5 + 0.5 * sin(uTime * 3.0 + position.x);
+                vAlpha = twinkle;
+                gl_PointSize = size * (300.0 / -mvPosition.z);
+            }
+        `,
+        fragmentShader: `
+            varying float vAlpha; void main() {
+                vec2 xy = gl_PointCoord.xy - vec2(0.5);
+                float dist = length(xy);
+                if(dist > 0.5) discard;
+                float glow = 1.0 - (dist * 2.0);
+                glow = pow(glow, 2.0);
+                gl_FragColor = vec4(1.0, 1.0, 1.0, vAlpha * glow); 
+            }
+        `,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+    });
+
+    const stars = new THREE.Points(starGeo, starShaderMat);
+    starsRef.current = stars;
     scene.add(stars);
 
-    // Secondary distant stars
-    const pGeo2 = new THREE.BufferGeometry();
-    const pCount2 = isMobile ? 200 : 800;
-    const pPos2 = [];
-    for(let i=0; i<pCount2; i++) {
-        pPos2.push((Math.random()-0.5)*40, (Math.random()-0.5)*40, (Math.random()-0.5)*40 - 5);
-    }
-    pGeo2.setAttribute('position', new THREE.Float32BufferAttribute(pPos2, 3));
-    const stars2 = new THREE.Points(pGeo2, new THREE.PointsMaterial({ 
-        size: 0.02, 
-        color: 0xffffff, 
-        transparent: true, 
-        opacity: 0.3,
-        depthWrite: false
-    }));
-    scene.add(stars2);
+    // Camera
+    camera.position.z = 6;
 
-
-    // --- Positioning ---
-    camera.position.z = 5;
-
-    // --- Animation Loop ---
     const clock = new THREE.Clock();
     let reqId: number;
 
     const animate = () => {
       reqId = requestAnimationFrame(animate);
       const t = clock.getElapsedTime();
-      
-      // Update Uniforms for Sphere
+      const zen = isZenRef.current;
+
+      // Update Uniforms
       mat.uniforms.uTime.value = t;
-      
-      const targetTalk = isTalkingRef.current ? 1.5 : 0;
-      // Smooth interpolation
-      mat.uniforms.uTalk.value += (targetTalk - mat.uniforms.uTalk.value) * 0.1;
-      
-      // Sphere idle rotation
-      sphere.rotation.y = t * 0.15;
-      sphere.rotation.z = Math.sin(t * 0.5) * 0.05;
+      starShaderMat.uniforms.uTime.value = t;
 
-      // --- MOVING COSMOS EFFECT ---
-      // Only rotate visuals, avoid heavy calculations per frame
-      stars.rotation.y = t * 0.05;
-      stars.rotation.x = t * 0.02;
-      stars2.rotation.y = t * 0.02;
+      // Talking Animation
+      const targetTalk = isTalkingRef.current ? 2.0 : 0;
+      mat.uniforms.uTalk.value += (targetTalk - mat.uniforms.uTalk.value) * 0.15;
 
-      // Gentle floating camera movement
-      // Reduced movement on mobile to prevent motion sickness / reduce recalc
-      camera.position.y = Math.sin(t * 0.2) * (isMobile ? 0.02 : 0.1);
+      // 1. MAIN SPHERE BEHAVIOR
+      if (zen) {
+          // ZEN MODE: Planet Mode (Tilted Axis Rotation)
+          if (mainGroupRef.current) {
+              // Tilt axis
+              mainGroupRef.current.rotation.z = THREE.MathUtils.lerp(mainGroupRef.current.rotation.z, -0.4, 0.02); 
+              // Spin
+              mainGroupRef.current.rotation.y += 0.005;
+          }
+          // Make sphere pulse slower
+          mat.opacity += (0.8 - mat.opacity) * 0.05;
+      } else {
+          // NORMAL MODE: Float upright
+          if (mainGroupRef.current) {
+              mainGroupRef.current.rotation.z = THREE.MathUtils.lerp(mainGroupRef.current.rotation.z, 0, 0.05);
+              mainGroupRef.current.rotation.y += 0.002;
+          }
+          if (isThinkingRef.current) {
+              sphere.rotation.y += 0.1;
+              mat.opacity = 0.8 + Math.sin(t * 10.0) * 0.1;
+          } else {
+              sphere.rotation.y = t * 0.1;
+              sphere.rotation.x = Math.sin(t * 0.5) * 0.1;
+              mat.opacity += (0.6 - mat.opacity) * 0.05;
+          }
+      }
+
+      // 2. RING BEHAVIOR (PC Only)
+      if (pulseRingRef.current) {
+          if (zen) {
+             // In Zen, ring aligns with planet tilt naturally via group
+             // Just add subtle wobble
+             pulseRingRef.current.scale.setScalar(1.2 + Math.sin(t)*0.05);
+          } else {
+             pulseRingRef.current.rotation.x = Math.PI / 2 + Math.sin(t * 0.3) * 0.2;
+             pulseRingRef.current.scale.setScalar(1 + Math.sin(t * 2.0) * 0.02);
+          }
+      }
+
+      // 3. STARS BEHAVIOR
+      if (starsRef.current && dustRef.current) {
+          const speed = zen ? 0.05 : 0.01; // Faster in Zen
+          starsRef.current.rotation.y += speed;
+          dustRef.current.rotation.y += speed * 0.5;
+      }
+
+      // 4. CAMERA BEHAVIOR
+      const targetZ = isMobile ? 7.0 : 6.0;
+      const zenZ = targetZ + (isMobile ? 2.0 : 3.0); // Move back in Zen
+      const finalZ = zen ? zenZ : targetZ;
       
+      camera.position.z += (finalZ - camera.position.z) * 0.02;
+      camera.position.y = Math.sin(t * 0.2) * 0.2;
+
       renderer.render(scene, camera);
     };
     
     animate();
 
-    // --- Event Listeners ---
     const handleResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
       const mobile = w < 768;
-      
+      setIsMobileState(mobile);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-      // Keep optimization on resize
-      renderer.setPixelRatio(mobile ? 1 : Math.min(window.devicePixelRatio, 2));
       
-      if (mobile) { 
-        camera.position.z = 6.5; 
-        sphere.position.y = 1.2;
-        stars.position.y = 1.0;
+      if (mobile) {
+        sphere.position.y = 0.5; // Move up on mobile
+        if (pulseRingRef.current) pulseRingRef.current.visible = false;
       } else {
-        camera.position.z = 5; 
         sphere.position.y = 0;
-        stars.position.y = 0;
+        if (pulseRingRef.current) pulseRingRef.current.visible = true;
       }
     };
-
-    const handleMouseMove = (e: MouseEvent) => {
-        if (window.innerWidth < 768) return;
-        const x = (e.clientX / window.innerWidth - 0.5) * 2;
-        const y = (e.clientY / window.innerHeight - 0.5) * 2;
-        
-        gsap.to(sphere.rotation, {x: y * 0.5, duration: 1.5});
-        gsap.to(stars.rotation, {x: -y * 0.1, y: -x * 0.1, duration: 2});
-    };
-
-    window.addEventListener('resize', handleResize);
-    document.addEventListener('mousemove', handleMouseMove);
     
+    window.addEventListener('resize', handleResize);
     handleResize();
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      document.removeEventListener('mousemove', handleMouseMove);
       cancelAnimationFrame(reqId);
       if(containerRef.current && renderer.domElement) {
         containerRef.current.removeChild(renderer.domElement);
       }
-      geo.dispose();
-      mat.dispose();
-      pGeo.dispose();
-      pMat.dispose();
-      pGeo2.dispose();
+      geo.dispose(); mat.dispose(); dustGeo.dispose(); dustMat.dispose(); starGeo.dispose(); starShaderMat.dispose();
     };
   }, []);
 
-  // Refs for loop access
   const isTalkingRef = useRef(isTalking);
+  const isThinkingRef = useRef(isThinking);
+  const isZenRef = useRef(isZen);
+  
   useEffect(() => { isTalkingRef.current = isTalking; }, [isTalking]);
+  useEffect(() => { isThinkingRef.current = isThinking; }, [isThinking]);
+  useEffect(() => { isZenRef.current = isZen; }, [isZen]);
 
   return (
-    <div 
-      ref={containerRef} 
-      id="canvas-container" 
-      className="fixed inset-0 z-0 pointer-events-none transform-gpu" // transform-gpu forces GPU layer
-    />
+    <div ref={containerRef} className="fixed inset-0 z-0 pointer-events-none" />
   );
 };
 

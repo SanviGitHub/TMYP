@@ -1,4 +1,5 @@
-import { API_ENDPOINTS, EMERGENCIES, SYSTEM_PROMPT_TEMPLATE } from '../constants';
+
+import { API_ENDPOINTS, EMERGENCIES, SYSTEM_PROMPT_TEMPLATE, FALLBACK_RESPONSES } from '../constants';
 import { EmergencyInfo, Message } from '../types';
 
 export const detectEmergency = (msg: string): EmergencyInfo[] => {
@@ -19,21 +20,13 @@ export const generateEmergencyResponse = (detected: EmergencyInfo[], isUrgent: b
     : `Te doy el ${p.number} (${p.name}) - ${p.desc}. `;
 };
 
-export const detectCreator = (msg: string): boolean => {
-  const kw = ['creador', 'quien te hizo', 'quien te creo', 'desarrollador', 'santino', 'dante'];
-  return kw.some(k => msg.toLowerCase().includes(k));
-};
-
 export const detectPromptHack = (msg: string): boolean => {
-  const kw = ['prompt', 'instrucciones', 'configuracion', 'system prompt', 'tus reglas', 'quien sos en realidad'];
+  const kw = ['system prompt', 'ignore all previous instructions', 'tu configuracion interna'];
   return kw.some(k => msg.toLowerCase().includes(k));
 };
 
 export const processResponse = (text: string): string => {
-  // Basic cleanup
   let clean = text.replace(/^(IYM:|Assistant:|AI:)/i, '').replace(/\*\*|__/g, '').trim();
-  
-  // Cut if too long or ends abruptly
   if (clean.length > 10 && !clean.match(/[.!?]$/)) {
      const lastPunc = Math.max(clean.lastIndexOf('.'), clean.lastIndexOf('!'), clean.lastIndexOf('?'));
      if (lastPunc > clean.length * 0.7) clean = clean.substring(0, lastPunc + 1);
@@ -42,14 +35,16 @@ export const processResponse = (text: string): string => {
   return clean;
 };
 
+// Utility to get a random fallback message
+const getFallbackResponse = (): string => {
+  const randomIndex = Math.floor(Math.random() * FALLBACK_RESPONSES.length);
+  return FALLBACK_RESPONSES[randomIndex];
+};
+
 export const sendMessageToAI = async (messages: Message[], userText: string): Promise<string> => {
     // 1. Security Checks
     if (detectPromptHack(userText)) {
-      return "No puedo responderte a esas preguntas, lo siento. Soy un psicólogo profesional. ¿Hablamos de vos? 😊";
-    }
-
-    if (detectCreator(userText)) {
-      return "Fui creado por Santino V. y Dante G., estudiantes que querían ayudar con la salud mental. Soy IYM. ¿En qué te ayudo? 😊";
+      return "Soy IYM, tu psicólogo personal. Enfoquémonos en lo que te pasa a vos. 😊";
     }
 
     // 2. Emergency Detection
@@ -72,8 +67,6 @@ export const sendMessageToAI = async (messages: Message[], userText: string): Pr
 
     // 3. Build Payload
     const systemPrompt = SYSTEM_PROMPT_TEMPLATE(emergencyContext);
-    
-    // We only send the last few messages to save context/tokens and focus on immediate conversation
     const conversationHistory = messages.slice(-8).map(m => ({ role: m.role, content: m.content }));
     const fullMessages = [
         { role: "system", content: systemPrompt },
@@ -81,12 +74,16 @@ export const sendMessageToAI = async (messages: Message[], userText: string): Pr
         { role: "user", content: userText }
     ];
 
-    let reply = "Dame un momento...";
+    let reply = "";
     let success = false;
 
-    // 4. API Redundancy
+    // 4. API Attempt Loop
     for (const api of API_ENDPOINTS) {
         try {
+            // Abort controller to prevent hanging requests (timeout 8s)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000);
+
             const response = await fetch(api.url, {
                 method: "POST", 
                 headers: { 
@@ -97,9 +94,12 @@ export const sendMessageToAI = async (messages: Message[], userText: string): Pr
                     model: api.model, 
                     messages: fullMessages, 
                     max_tokens: 800, 
-                    temperature: 0.75 
-                })
+                    temperature: 0.6 
+                }),
+                signal: controller.signal
             });
+            
+            clearTimeout(timeoutId);
 
             if (response.ok) {
                 const data = await response.json();
@@ -107,22 +107,27 @@ export const sendMessageToAI = async (messages: Message[], userText: string): Pr
                 if (content) {
                     reply = content;
                     success = true;
-                    break;
+                    break; // Success! Exit loop
                 }
+            } else {
+                // Log error but continue loop
+                console.warn(`API ${api.model} failed with status: ${response.status}`);
             }
         } catch (e) {
-            console.error("API Fail", e);
-            continue;
+            console.warn(`Network/Fetch Error with ${api.model}:`, e);
+            // Continue to next API
         }
     }
 
+    // 5. Fallback Logic (Offline Mode)
     if (!success) {
-        throw new Error("No services available");
+        console.warn("All APIs failed or network offline. Using therapeutic simulation fallback.");
+        reply = getFallbackResponse();
+    } else {
+        reply = processResponse(reply);
     }
 
-    reply = processResponse(reply);
-
-    // Append non-urgent emergency info if needed and not already present
+    // Append non-urgent emergency info if needed
     if (emergencies.length > 0 && !isUrgent && !reply.includes('135')) {
         const info = generateEmergencyResponse(emergencies, false);
         if (info) reply = info + "\n\n" + reply;

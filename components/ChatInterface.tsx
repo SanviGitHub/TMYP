@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Message } from '../types';
 
@@ -31,15 +32,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isTalking, onSe
       {/* Header */}
       <header className="px-5 py-4 md:px-6 md:py-5 border-b border-white/5 flex items-center justify-between bg-white/5 shrink-0">
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${isTalking ? 'bg-accent shadow-[0_0_12px_#00fff2] scale-110' : 'bg-emerald-500/50'}`} />
-            {isTalking && <div className="absolute inset-0 rounded-full bg-accent animate-ping opacity-75"></div>}
+          <div className="relative flex items-end gap-1 h-4">
+            {/* Audio Wave Visualizer */}
+            {isTalking ? (
+                <>
+                    <div className="w-1 bg-accent rounded-full animate-[bounce_1s_infinite] h-full"></div>
+                    <div className="w-1 bg-accent rounded-full animate-[bounce_1.2s_infinite] h-3/4"></div>
+                    <div className="w-1 bg-accent rounded-full animate-[bounce_0.8s_infinite] h-1/2"></div>
+                </>
+            ) : (
+                <div className={`w-2.5 h-2.5 rounded-full bg-emerald-500/50`} />
+            )}
           </div>
           <div>
             <h1 className="font-title font-bold text-lg md:text-xl text-white tracking-wide">IYM Psico</h1>
             <div className="flex gap-1.5">
                 <span className="w-1 h-1 rounded-full bg-white/30 mt-1.5"></span>
-                <span className="text-[0.65rem] text-white/40 font-body uppercase tracking-wider">En línea 24/7</span>
+                <span className="text-[0.65rem] text-white/40 font-body uppercase tracking-wider">
+                    {isTalking ? 'Transmitiendo...' : 'En línea 24/7'}
+                </span>
             </div>
           </div>
         </div>
@@ -78,7 +89,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isTalking, onSe
 
       {/* Input Area */}
       <div className="p-3 md:p-5 bg-black/60 md:bg-black/40 border-t border-white/5 backdrop-blur-md shrink-0 pb-safe-area">
-        <form onSubmit={handleSubmit} className="relative flex items-center gap-2 md:gap-3 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 md:px-4 md:py-2 focus-within:border-accent/50 focus-within:bg-white/10 transition-all duration-300 shadow-inner">
+        <form onSubmit={handleSubmit} className="relative flex items-center gap-2 md:gap-3 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 md:px-4 md:py-2 focus-within:border-accent/50 focus-within:bg-white/10 transition-all duration-300 shadow-inner focus-within:shadow-[0_0_20px_rgba(0,255,242,0.1)]">
           <input
             type="text"
             value={input}

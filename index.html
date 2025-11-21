@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#050505" />
+  <meta name="theme-color" content="#0b0c15" />
   <title>IYM Psico</title>
   
   <!-- Tipografías -->
@@ -18,13 +18,13 @@
       theme: {
         extend: {
           colors: {
-            bg: '#050505',
+            bg: '#0b0c15', // Lighter Midnight Blue instead of pure black
             primary: '#6366f1',
             secondary: '#a855f7', 
             accent: '#00fff2',
             danger: '#f43f5e',
-            glass: 'rgba(20, 20, 25, 0.6)',
-            'glass-border': 'rgba(255, 255, 255, 0.08)',
+            glass: 'rgba(30, 30, 40, 0.4)', // Lighter glass
+            'glass-border': 'rgba(255, 255, 255, 0.1)',
           },
           fontFamily: {
             title: ['Syne', 'sans-serif'],
@@ -32,18 +32,29 @@
           },
           animation: {
             'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            'fade-in': 'fadeIn 0.5s ease-out forwards',
+            'fade-in': 'fadeIn 0.8s ease-out forwards',
             'float': 'float 10s ease-in-out infinite',
             'float-delayed': 'float 12s ease-in-out infinite 5s',
+            'dust': 'dust 20s linear infinite',
+            'grid-flow': 'gridFlow 20s linear infinite',
+            'flash': 'flash 0.5s ease-out',
           },
           keyframes: {
             fadeIn: {
-              '0%': { opacity: '0', transform: 'translateY(10px)' },
+              '0%': { opacity: '0', transform: 'translateY(20px)' },
               '100%': { opacity: '1', transform: 'translateY(0)' },
             },
             float: {
               '0%, 100%': { transform: 'translateY(0) scale(1)' },
               '50%': { transform: 'translateY(-20px) scale(1.05)' },
+            },
+            dust: {
+              '0%': { transform: 'translateY(0)' },
+              '100%': { transform: 'translateY(-100vh)' },
+            },
+            gridFlow: {
+              '0%': { backgroundPosition: '0px 0px' },
+              '100%': { backgroundPosition: '0px 40px' },
             }
           }
         }
@@ -52,29 +63,29 @@
   </script>
   <style>
     body {
-      background-color: #050505;
+      background-color: #0b0c15;
       color: #e2e8f0;
-      overflow: hidden; /* Prevent body scroll, handle in components */
+      overflow: hidden; /* Prevent body scroll, handle inside components */
     }
     /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
 
     /* --- VISUAL EFFECTS --- */
 
-    /* 1. Cinematic Grain */
+    /* 1. Cinematic Grain (Reduced Opacity for Performance) */
     .bg-noise {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
       pointer-events: none;
       z-index: 9999;
-      opacity: 0.03;
+      opacity: 0.04; 
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='1'/%3E%3C/svg%3E");
     }
 
-    /* 2. Scanlines (Old Monitor Effect) */
+    /* 2. Scanlines (Mobile Optimized) */
     .scanlines {
       background: linear-gradient(
         to bottom,
@@ -83,46 +94,42 @@
         rgba(0,0,0,0.1) 50%,
         rgba(0,0,0,0.1)
       );
-      background-size: 100% 4px;
+      background-size: 100% 3px;
       position: fixed;
       top: 0; right: 0; bottom: 0; left: 0;
       z-index: 9998;
       pointer-events: none;
-      opacity: 0.6;
+      opacity: 0.2;
     }
 
-    /* 3. Glitch Text Effect on Hover */
-    .glitch-hover {
-      position: relative;
+    /* 3. Cyber Grid Background (Animated) */
+    .bg-grid {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: -2;
+      background-size: 50px 50px;
+      background-image: linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      pointer-events: none;
+      will-change: background-position;
     }
-    .glitch-hover::before,
-    .glitch-hover::after {
+
+    /* 4. Glitch Text Effect */
+    .glitch-hover { position: relative; }
+    .glitch-hover::before, .glitch-hover::after {
       content: attr(data-text);
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #050505;
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: #0b0c15;
     }
     .glitch-hover::before {
-      left: 2px;
-      text-shadow: -1px 0 #00fff2;
-      clip: rect(24px, 550px, 90px, 0);
-      animation: glitch-anim-2 3s infinite linear alternate-reverse;
-      opacity: 0;
+      left: 2px; text-shadow: -1px 0 #00fff2; clip: rect(24px, 550px, 90px, 0);
+      animation: glitch-anim-2 3s infinite linear alternate-reverse; opacity: 0;
     }
     .glitch-hover::after {
-      left: -2px;
-      text-shadow: -1px 0 #f43f5e;
-      clip: rect(85px, 550px, 140px, 0);
-      animation: glitch-anim 2.5s infinite linear alternate-reverse;
-      opacity: 0;
+      left: -2px; text-shadow: -1px 0 #f43f5e; clip: rect(85px, 550px, 140px, 0);
+      animation: glitch-anim 2.5s infinite linear alternate-reverse; opacity: 0;
     }
-    .glitch-hover:hover::before,
-    .glitch-hover:hover::after {
-      opacity: 1;
-    }
+    .glitch-hover:hover::before, .glitch-hover:hover::after { opacity: 1; }
 
     @keyframes glitch-anim {
       0% { clip: rect(14px, 9999px, 121px, 0); }
@@ -155,7 +162,6 @@
 </head>
 <body>
   <div id="root"></div>
-  <!-- Esta línea conecta tu código -->
   <script type="module" src="./index.tsx"></script>
 </body>
 </html>

@@ -7,24 +7,27 @@ interface NavigationProps {
   onSOS: () => void;
   onBreathe: () => void;
   onMood: () => void;
+  onFocus: () => void;
   onToggleSound: () => void;
+  onToggleZen: () => void;
   isMuted: boolean;
+  isZen: boolean;
   highlightMood?: boolean;
 }
 
 const Navigation: React.FC<NavigationProps> = ({ 
-  onVent, onReset, onSOS, onBreathe, onMood, onToggleSound, isMuted, highlightMood 
+  onVent, onReset, onSOS, onBreathe, onMood, onFocus, onToggleSound, onToggleZen, isMuted, isZen, highlightMood 
 }) => {
   return (
-    <aside className="fixed top-0 left-0 w-full h-16 md:h-full md:w-20 z-50 flex md:flex-col md:justify-start md:gap-5 justify-between items-center p-3 md:py-8 bg-bg/90 md:bg-bg/80 backdrop-blur-lg border-b md:border-b-0 md:border-r border-glass-border transition-all">
+    <aside className="fixed top-0 left-0 w-full h-16 md:h-full md:w-20 z-50 flex md:flex-col md:justify-start md:gap-5 justify-between items-center p-3 md:py-8 bg-bg/80 md:bg-bg/60 backdrop-blur-lg border-b md:border-b-0 md:border-r border-glass-border transition-all">
       {/* Logo with Glitch Effect */}
       <div 
-        className="text-white/30 font-title font-extrabold text-lg md:text-2xl tracking-widest md:[writing-mode:vertical-rl] md:rotate-180 select-none hidden md:block md:h-32 text-center glitch-hover cursor-default transition-colors hover:text-white/80"
+        className="text-white/40 font-title font-extrabold text-lg md:text-2xl tracking-widest md:[writing-mode:vertical-rl] md:rotate-180 select-none hidden md:block md:h-32 text-center glitch-hover cursor-default transition-colors hover:text-white/90"
         data-text="IYM PSICO"
       >
         IYM PSICO
       </div>
-      <div className="md:hidden text-white/30 font-title font-extrabold text-lg glitch-hover" data-text="IYM">IYM</div>
+      <div className="md:hidden text-white/40 font-title font-extrabold text-lg glitch-hover" data-text="IYM">IYM</div>
 
       {/* Buttons */}
       <div className="flex md:flex-col gap-2 md:gap-5 overflow-x-auto md:overflow-visible w-full md:w-auto justify-end md:justify-start pr-2 md:pr-0">
@@ -38,7 +41,7 @@ const Navigation: React.FC<NavigationProps> = ({
           {isMuted ? '🔇' : '🎧'}
         </button>
 
-        {/* MOOD BUTTON - Highlighted style is solid, opaque, and sharp (no blur on button) */}
+        {/* MOOD BUTTON */}
         <button 
           onClick={onMood}
           className={`
@@ -52,6 +55,26 @@ const Navigation: React.FC<NavigationProps> = ({
           aria-label="Cambiar estado de ánimo"
         >
           🎭
+        </button>
+
+        {/* ZEN MODE BUTTON */}
+        <button 
+          onClick={onToggleZen}
+          className={`w-10 h-10 md:w-12 md:h-12 rounded-xl border border-glass-border flex items-center justify-center text-xl active:scale-95 transition-all duration-300 touch-manipulation shrink-0 ${isZen ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-white/5 text-gray-200 hover:bg-emerald-500/10 hover:text-emerald-200'}`}
+          title="Modo Zen (Ocultar Chat)"
+          aria-label="Modo Zen"
+        >
+          {isZen ? '🧿' : '👁️'}
+        </button>
+
+        {/* FOCUS BUTTON (NEW) */}
+        <button 
+          onClick={onFocus}
+          className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/5 border border-glass-border flex items-center justify-center text-xl text-amber-200 hover:bg-amber-500/20 hover:text-amber-300 hover:border-amber-300 active:scale-95 transition-all duration-300 touch-manipulation shrink-0"
+          title="Modo Enfoque"
+          aria-label="Modo Enfoque"
+        >
+          ⏳
         </button>
 
         <button 
