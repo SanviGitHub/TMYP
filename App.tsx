@@ -4,6 +4,7 @@ import Navigation from './components/Navigation';
 import ChatInterface from './components/ChatInterface';
 import VentModal from './components/VentModal';
 import SOSModal from './components/SOSModal';
+import BreathingModal from './components/BreathingModal';
 import { Message } from './types';
 import { QUOTES } from './constants';
 import { sendMessageToAI } from './services/aiService';
@@ -12,7 +13,7 @@ const App: React.FC = () => {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTalking, setIsTalking] = useState(false);
-  const [activeModal, setActiveModal] = useState<'vent' | 'sos' | null>(null);
+  const [activeModal, setActiveModal] = useState<'vent' | 'sos' | 'breathe' | null>(null);
   const [quote, setQuote] = useState("Cargando paz mental...");
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -128,6 +129,7 @@ const App: React.FC = () => {
         <div className="pointer-events-auto z-50">
             <Navigation 
             onVent={() => setActiveModal('vent')}
+            onBreathe={() => setActiveModal('breathe')}
             onReset={handleReset}
             onSOS={() => setActiveModal('sos')}
             />
@@ -154,6 +156,7 @@ const App: React.FC = () => {
       <div className="relative z-[100]">
         <VentModal isOpen={activeModal === 'vent'} onClose={() => setActiveModal(null)} />
         <SOSModal isOpen={activeModal === 'sos'} onClose={() => setActiveModal(null)} />
+        <BreathingModal isOpen={activeModal === 'breathe'} onClose={() => setActiveModal(null)} />
       </div>
 
     </div>
