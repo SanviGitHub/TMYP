@@ -5,6 +5,7 @@ import ChatInterface from './components/ChatInterface';
 import VentModal from './components/VentModal';
 import SOSModal from './components/SOSModal';
 import BreathingModal from './components/BreathingModal';
+import UpdateChecker from './components/UpdateChecker';
 import { Message } from './types';
 import { QUOTES } from './constants';
 import { sendMessageToAI } from './services/aiService';
@@ -152,11 +153,13 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Modals */}
+      {/* 4. Modals & Overlays */}
       <div className="relative z-[100]">
         <VentModal isOpen={activeModal === 'vent'} onClose={() => setActiveModal(null)} />
         <SOSModal isOpen={activeModal === 'sos'} onClose={() => setActiveModal(null)} />
         <BreathingModal isOpen={activeModal === 'breathe'} onClose={() => setActiveModal(null)} />
+        {/* Update Checker is always mounted to poll in background */}
+        <UpdateChecker />
       </div>
 
     </div>
