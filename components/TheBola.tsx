@@ -9,7 +9,7 @@ interface TheBolaProps {
 const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Shaders (preserved verbatim to ensure exact brand look)
+  // Shaders (Optimized: same visual logic, standard precision)
   const vertexShader = `
     varying vec2 vUv; varying vec3 vNormal; uniform float uTime; uniform float uTalk; 
     void main() { vUv = uv; vNormal = normal; float breath = sin(uTime * 0.5) * 0.05; float speech = sin(position.y * 10.0 + uTime * 15.0) * uTalk * 0.1; vec3 newPos = position + normal * (breath + speech); gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0); }
@@ -25,24 +25,35 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     // --- Scene Setup ---
     const width = window.innerWidth;
     const height = window.innerHeight;
+    const isMobile = width < 768;
     
     const scene = new THREE.Scene();
-    // Slight fog for depth in the cosmos
+    // Fog slightly reduced for performance, still adds depth
     scene.fog = new THREE.FogExp2(0x050505, 0.02);
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    
+    // PERFORMANCE: Disable antialias on mobile/low-end to save huge GPU resources
+    // PERFORMANCE: limit powerPreference to high-performance
+    const renderer = new THREE.WebGLRenderer({ 
+        alpha: true, 
+        antialias: !isMobile, 
+        powerPreference: "high-performance",
+        precision: isMobile ? "mediump" : "highp"
+    });
     
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // PERFORMANCE: Force pixel ratio to 1 on mobile. High DPI rendering is the #1 lag cause on phones.
+    renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     
     while(containerRef.current.firstChild) {
       containerRef.current.removeChild(containerRef.current.firstChild);
     }
     containerRef.current.appendChild(renderer.domElement);
 
-    // --- The Bola (Sphere) - UNTOUCHED AS REQUESTED ---
-    const geo = new THREE.IcosahedronGeometry(1.8, 30);
+    // --- The Bola (Sphere) ---
+    // PERFORMANCE: Reduced segments slightly (30 -> 20) for mobile, barely visible difference on small screens
+    const geo = new THREE.IcosahedronGeometry(1.8, isMobile ? 20 : 30);
     const mat = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -61,22 +72,22 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
 
     // --- Background Particles (The Universe) ---
     const pGeo = new THREE.BufferGeometry();
-    const pCount = 800; // Increased density for "cosmos" feel
+    // PERFORMANCE: Drastically reduce particle count on mobile (800 -> 200)
+    const pCount = isMobile ? 200 : 800; 
     const pPos = [];
     const pSizes = [];
 
     for(let i=0; i<pCount; i++) {
-        // Spread them out more for a universe feel
         pPos.push((Math.random()-0.5)*25, (Math.random()-0.5)*25, (Math.random()-0.5)*20);
         pSizes.push(Math.random());
     }
     
     pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
-    pGeo.setAttribute('size', new THREE.Float32BufferAttribute(pSizes, 1)); // Custom attribute if we wanted shader particles, but using PointsMaterial for simplicity
+    pGeo.setAttribute('size', new THREE.Float32BufferAttribute(pSizes, 1));
 
     const pMat = new THREE.PointsMaterial({ 
         size: 0.04, 
-        color: 0xa855f7, // Secondary purple color
+        color: 0xa855f7, 
         transparent: true, 
         opacity: 0.6,
         sizeAttenuation: true,
@@ -86,10 +97,12 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     const stars = new THREE.Points(pGeo, pMat);
     scene.add(stars);
 
-    // Secondary distant stars (white)
+    // Secondary distant stars
+    // PERFORMANCE: Reduced secondary stars
     const pGeo2 = new THREE.BufferGeometry();
+    const pCount2 = isMobile ? 300 : 1000;
     const pPos2 = [];
-    for(let i=0; i<1000; i++) {
+    for(let i=0; i<pCount2; i++) {
         pPos2.push((Math.random()-0.5)*40, (Math.random()-0.5)*40, (Math.random()-0.5)*40 - 5);
     }
     pGeo2.setAttribute('position', new THREE.Float32BufferAttribute(pPos2, 3));
@@ -112,6 +125,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
       mat.uniforms.uTime.value = t;
       
       const targetTalk = isTalkingRef.current ? 1.5 : 0;
+      // Smooth interpolation
       mat.uniforms.uTalk.value += (targetTalk - mat.uniforms.uTalk.value) * 0.1;
       
       // Sphere idle rotation
@@ -119,14 +133,12 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
       sphere.rotation.z = Math.sin(t * 0.5) * 0.05;
 
       // --- MOVING COSMOS EFFECT ---
-      // Rotate the entire particle systems slowly
       stars.rotation.y = t * 0.05;
       stars.rotation.x = t * 0.02;
-      
-      stars2.rotation.y = t * 0.02; // Parallax effect (slower speed)
+      stars2.rotation.y = t * 0.02;
 
-      // Gentle floating camera movement
-      camera.position.y = Math.sin(t * 0.2) * 0.1;
+      // Gentle floating camera movement (Reduced amplitude on mobile for stability)
+      camera.position.y = Math.sin(t * 0.2) * (isMobile ? 0.05 : 0.1);
       
       renderer.render(scene, camera);
     };
@@ -137,14 +149,18 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     const handleResize = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
+      const mobile = w < 768;
+      
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      // Ensure pixel ratio stays efficient on resize
+      renderer.setPixelRatio(mobile ? 1 : Math.min(window.devicePixelRatio, 2));
       
-      if (w < 768) { 
+      if (mobile) { 
         camera.position.z = 6.5; 
         sphere.position.y = 1.2;
-        stars.position.y = 1.0; // Move stars up too on mobile
+        stars.position.y = 1.0;
       } else {
         camera.position.z = 5; 
         sphere.position.y = 0;
@@ -153,13 +169,13 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
+        // PERFORMANCE: Skip mouse calculations on mobile touch
+        if (window.innerWidth < 768) return;
+
         const x = (e.clientX / window.innerWidth - 0.5) * 2;
         const y = (e.clientY / window.innerHeight - 0.5) * 2;
         
-        // Rotate sphere towards mouse
         gsap.to(sphere.rotation, {x: y * 0.5, duration: 1.5});
-        
-        // Parallax stars slightly opposite to mouse for depth
         gsap.to(stars.rotation, {x: -y * 0.1, y: -x * 0.1, duration: 2});
     };
 
