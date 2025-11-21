@@ -1,3 +1,4 @@
+
 export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -28,4 +29,6 @@ export interface MoodOption {
   threeColor: string; // Hex for 3D Sphere
   emoji: string;
   systemContext: string; // Instruction for the AI
+  bpm: number; // Beats per minute for audio engine
+  scale: number[]; // Musical frequencies for the mood
 }
