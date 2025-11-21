@@ -5,16 +5,18 @@ import ChatInterface from './components/ChatInterface';
 import VentModal from './components/VentModal';
 import SOSModal from './components/SOSModal';
 import BreathingModal from './components/BreathingModal';
+import MoodSelector from './components/MoodSelector';
 import UpdateChecker from './components/UpdateChecker';
-import { Message } from './types';
-import { QUOTES } from './constants';
+import { Message, MoodOption } from './types';
+import { QUOTES, MOODS } from './constants';
 import { sendMessageToAI } from './services/aiService';
 
 const App: React.FC = () => {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTalking, setIsTalking] = useState(false);
-  const [activeModal, setActiveModal] = useState<'vent' | 'sos' | 'breathe' | null>(null);
+  const [activeModal, setActiveModal] = useState<'vent' | 'sos' | 'breathe' | 'mood' | null>(null);
+  const [currentMood, setCurrentMood] = useState<MoodOption>(MOODS[0]); // Default: Neutral
   const [quote, setQuote] = useState("Cargando paz mental...");
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -34,6 +36,22 @@ const App: React.FC = () => {
       typingTimeoutRef.current = setTimeout(() => {
         addMessageWithTyping("¡Hola! Soy IYM. Estoy acá para escucharte, sin juzgarte. ¿Cómo venís hoy?", 'assistant');
       }, 800);
+  };
+
+  const handleMoodChange = (mood: MoodOption) => {
+    setCurrentMood(mood);
+    setActiveModal(null);
+    
+    // Add a small system message to chat (visible only to user to confirm change)
+    const systemMsg: Message = {
+        role: 'system', // We render this differently below if needed, or reuse standard bubble with distinct style
+        content: `✨ <em>Ambiente cambiado a: <strong>${mood.label}</strong></em>`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setMessages(prev => [...prev, systemMsg]);
+    
+    // Optional: Trigger AI response to the mood change automatically? 
+    // Better strategy: Just let the mood influence the NEXT user message.
   };
 
   // Helper to add message with "typing" visual effect
@@ -57,12 +75,9 @@ const App: React.FC = () => {
       
       const typeChar = () => {
         setMessages(prev => {
-          // Safety check if messages were cleared (reset button pressed mid-typing)
           if (prev.length === 0) return prev;
-          
           const newArr = [...prev];
           const lastIdx = newArr.length - 1;
-          // Update last message
           newArr[lastIdx] = { 
             ...newArr[lastIdx], 
             content: text.substring(0, i + 1) 
@@ -87,26 +102,27 @@ const App: React.FC = () => {
     setIsTalking(true);
     
     try {
+      // INJECT MOOD CONTEXT INVISIBLE TO USER BUT VISIBLE TO AI
+      // We prepend a system instruction to the user's text just for the API call
+      const textWithContext = `[CONTEXTO ACTUAL DEL USUARIO: ${currentMood.systemContext}]\n\n${text}`;
+
       // Pass current messages context
-      const response = await sendMessageToAI(messages, text);
+      const response = await sendMessageToAI(messages, textWithContext);
       addMessageWithTyping(response, 'assistant'); 
     } catch (error) {
       console.error(error);
-      setIsTalking(false); // Stop ball animation on error
+      setIsTalking(false); 
       addMessageWithTyping("Me desconecté un segundo del universo. ¿Me lo repetís? 😅", 'assistant');
     }
   };
 
   const handleReset = () => {
     if (window.confirm("¿Querés borrar todo y empezar de cero?")) {
-      // Clear any pending typing intervals
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      
-      // Force state clear
       setMessages([]);
       setIsTalking(false);
+      setCurrentMood(MOODS[0]); // Reset mood too
       
-      // Restart after UI clears
       setTimeout(() => {
         setQuote(QUOTES[Math.floor(Math.random() * QUOTES.length)]);
         addMessageWithTyping("Listo, borrón y cuenta nueva. ¿En qué te puedo ayudar ahora?", 'assistant');
@@ -120,19 +136,20 @@ const App: React.FC = () => {
       {/* 1. Background Visuals */}
       <div className="fixed inset-0 bg-gradient-to-b from-[#020205] via-[#0c0c14] to-[#050505] z-0" />
       
-      {/* 2. The Bola (3D Sphere & Stars) */}
-      <TheBola isTalking={isTalking} />
+      {/* 2. The Bola (3D Sphere & Stars) - NOW WITH DYNAMIC MOOD COLOR */}
+      <TheBola isTalking={isTalking} moodColor={currentMood.threeColor} />
 
       {/* 3. Main Layout */}
       <div className="relative z-20 w-full h-full flex flex-col md:flex-row max-w-[1800px] mx-auto pointer-events-none md:pl-20">
         
-        {/* Navigation (Pointer events enabled internally) */}
+        {/* Navigation */}
         <div className="pointer-events-auto z-50">
             <Navigation 
             onVent={() => setActiveModal('vent')}
             onBreathe={() => setActiveModal('breathe')}
             onReset={handleReset}
             onSOS={() => setActiveModal('sos')}
+            onMood={() => setActiveModal('mood')}
             />
         </div>
 
@@ -158,7 +175,14 @@ const App: React.FC = () => {
         <VentModal isOpen={activeModal === 'vent'} onClose={() => setActiveModal(null)} />
         <SOSModal isOpen={activeModal === 'sos'} onClose={() => setActiveModal(null)} />
         <BreathingModal isOpen={activeModal === 'breathe'} onClose={() => setActiveModal(null)} />
-        {/* Update Checker is always mounted to poll in background */}
+        
+        <MoodSelector 
+          isOpen={activeModal === 'mood'} 
+          onClose={() => setActiveModal(null)} 
+          onSelectMood={handleMoodChange}
+          currentMoodId={currentMood.id}
+        />
+
         <UpdateChecker />
       </div>
 

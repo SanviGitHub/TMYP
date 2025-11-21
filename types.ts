@@ -20,3 +20,12 @@ export interface APIConfig {
   model: string;
   key: string;
 }
+
+export interface MoodOption {
+  id: string;
+  label: string;
+  color: string; // Hex for UI
+  threeColor: string; // Hex for 3D Sphere
+  emoji: string;
+  systemContext: string; // Instruction for the AI
+}

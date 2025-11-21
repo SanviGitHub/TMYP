@@ -1,4 +1,4 @@
-import { APIConfig, EmergencyConfig } from './types';
+import { APIConfig, EmergencyConfig, MoodOption } from './types';
 
 export const QUOTES = [
   "Hoy es un buen día para empezar de nuevo.", 
@@ -13,6 +13,49 @@ export const QUOTES = [
   "Está bien pedir ayuda. ¡Siempre!", 
   "Lo que sentís es válido.", 
   "Gracias por elegirte hoy."
+];
+
+export const MOODS: MoodOption[] = [
+  { 
+    id: 'neutral', 
+    label: 'Tranquilo / Normal', 
+    color: '#6366f1', 
+    threeColor: '#6366f1',
+    emoji: '🧘', 
+    systemContext: 'El usuario se siente neutral. Mantené tu personalidad estándar: amable, relajada y profesional.' 
+  },
+  { 
+    id: 'sad', 
+    label: 'Triste / Bajón', 
+    color: '#3b82f6', 
+    threeColor: '#1e40af', 
+    emoji: '🌧️',
+    systemContext: 'El usuario se siente triste o bajoneado. Sé extremadamente suave, empático, validante y cálido. Evitá ser demasiado energético.' 
+  },
+  { 
+    id: 'anxious', 
+    label: 'Ansioso / Estresado', 
+    color: '#f59e0b', 
+    threeColor: '#d97706', 
+    emoji: '⚡',
+    systemContext: 'El usuario siente ansiedad o estrés. Sé calmado, estructurado y ayudalo a respirar. Usá frases cortas y tranquilizadoras.' 
+  },
+  { 
+    id: 'angry', 
+    label: 'Enojado / Frustrado', 
+    color: '#f43f5e', 
+    threeColor: '#be123c', 
+    emoji: '🔥',
+    systemContext: 'El usuario siente enojo o frustración. No lo juzgues. Escuchalo activamente y validá su bronca de forma constructiva.' 
+  },
+  { 
+    id: 'happy', 
+    label: 'Motivado / Bien', 
+    color: '#10b981', 
+    threeColor: '#059669', 
+    emoji: '✨',
+    systemContext: 'El usuario se siente bien o motivado. ¡Celebralo! Sé entusiasta y reforzá esa energía positiva.' 
+  }
 ];
 
 export const EMERGENCIES: EmergencyConfig = {

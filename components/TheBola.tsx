@@ -4,10 +4,12 @@ import gsap from 'gsap';
 
 interface TheBolaProps {
   isTalking: boolean;
+  moodColor: string;
 }
 
-const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
+const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const materialRef = useRef<THREE.ShaderMaterial | null>(null);
   
   // Shaders (Optimized: same visual logic, standard precision)
   const vertexShader = `
@@ -18,6 +20,20 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
   const fragmentShader = `
     varying vec3 vNormal; uniform vec3 uColor; void main() { float intensity = pow(0.6 - dot(vNormal, vec3(0, 0, 1.0)), 2.0); gl_FragColor = vec4(uColor, 1.0) * intensity * 2.0; }
   `;
+
+  // Effect to handle color transition when mood changes
+  useEffect(() => {
+    if (materialRef.current) {
+      const newColor = new THREE.Color(moodColor);
+      gsap.to(materialRef.current.uniforms.uColor.value, {
+        r: newColor.r,
+        g: newColor.g,
+        b: newColor.b,
+        duration: 2, // Smooth 2 second transition
+        ease: "power2.inOut"
+      });
+    }
+  }, [moodColor]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -34,7 +50,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
     
     // PERFORMANCE: Disable antialias on mobile/low-end to save huge GPU resources
-    // PERFORMANCE: limit powerPreference to high-performance
     const renderer = new THREE.WebGLRenderer({ 
         alpha: true, 
         antialias: !isMobile, 
@@ -43,7 +58,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     });
     
     renderer.setSize(width, height);
-    // PERFORMANCE: Force pixel ratio to 1 on mobile. High DPI rendering is the #1 lag cause on phones.
     renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     
     while(containerRef.current.firstChild) {
@@ -52,7 +66,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     containerRef.current.appendChild(renderer.domElement);
 
     // --- The Bola (Sphere) ---
-    // PERFORMANCE: Reduced segments slightly (30 -> 20) for mobile, barely visible difference on small screens
     const geo = new THREE.IcosahedronGeometry(1.8, isMobile ? 20 : 30);
     const mat = new THREE.ShaderMaterial({
       vertexShader,
@@ -60,19 +73,20 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
       uniforms: { 
         uTime: { value: 0 }, 
         uTalk: { value: 0 }, 
-        uColor: { value: new THREE.Color("#6366f1") } 
+        uColor: { value: new THREE.Color(moodColor) } // Init with current mood
       },
       wireframe: true, 
       transparent: true, 
       opacity: 0.5
     });
     
+    materialRef.current = mat;
+
     const sphere = new THREE.Mesh(geo, mat);
     scene.add(sphere);
 
     // --- Background Particles (The Universe) ---
     const pGeo = new THREE.BufferGeometry();
-    // PERFORMANCE: Drastically reduce particle count on mobile (800 -> 200)
     const pCount = isMobile ? 200 : 800; 
     const pPos = [];
     const pSizes = [];
@@ -98,7 +112,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     scene.add(stars);
 
     // Secondary distant stars
-    // PERFORMANCE: Reduced secondary stars
     const pGeo2 = new THREE.BufferGeometry();
     const pCount2 = isMobile ? 300 : 1000;
     const pPos2 = [];
@@ -137,7 +150,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
       stars.rotation.x = t * 0.02;
       stars2.rotation.y = t * 0.02;
 
-      // Gentle floating camera movement (Reduced amplitude on mobile for stability)
+      // Gentle floating camera movement
       camera.position.y = Math.sin(t * 0.2) * (isMobile ? 0.05 : 0.1);
       
       renderer.render(scene, camera);
@@ -154,7 +167,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-      // Ensure pixel ratio stays efficient on resize
       renderer.setPixelRatio(mobile ? 1 : Math.min(window.devicePixelRatio, 2));
       
       if (mobile) { 
@@ -169,9 +181,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-        // PERFORMANCE: Skip mouse calculations on mobile touch
         if (window.innerWidth < 768) return;
-
         const x = (e.clientX / window.innerWidth - 0.5) * 2;
         const y = (e.clientY / window.innerHeight - 0.5) * 2;
         
@@ -199,10 +209,9 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking }) => {
     };
   }, []);
 
+  // Refs for loop access
   const isTalkingRef = useRef(isTalking);
-  useEffect(() => {
-    isTalkingRef.current = isTalking;
-  }, [isTalking]);
+  useEffect(() => { isTalkingRef.current = isTalking; }, [isTalking]);
 
   return (
     <div 
