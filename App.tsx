@@ -14,6 +14,30 @@ import { QUOTES, MOODS } from './constants';
 import { sendMessageToAI } from './services/aiService';
 import { audioService } from './services/audioService';
 
+// VISUAL COMPONENTS
+const CinematicOverlay = () => (
+  <>
+    <div className="bg-noise fixed inset-0 pointer-events-none z-[90]"></div>
+    <div className="scanlines fixed inset-0 pointer-events-none z-[80]"></div>
+    <div className="fixed inset-0 pointer-events-none z-[70] bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.6)_100%)]"></div>
+  </>
+);
+
+const AmbientAurora = ({ color }: { color: string }) => (
+  <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none">
+    {/* Top Right Blob */}
+    <div 
+      className="absolute -top-[10%] -right-[10%] w-[70vh] h-[70vh] rounded-full blur-[120px] opacity-20 animate-float transition-colors duration-[3000ms]"
+      style={{ backgroundColor: color }}
+    />
+    {/* Bottom Left Blob */}
+    <div 
+      className="absolute -bottom-[10%] -left-[10%] w-[60vh] h-[60vh] rounded-full blur-[100px] opacity-15 animate-float-delayed transition-colors duration-[3000ms]"
+      style={{ backgroundColor: color }}
+    />
+  </div>
+);
+
 const App: React.FC = () => {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
@@ -168,8 +192,11 @@ const App: React.FC = () => {
   return (
     <div className="relative w-full h-screen overflow-hidden bg-bg text-gray-100 font-body selection:bg-primary/30">
       
-      {/* 1. Background Visuals */}
-      <div className="fixed inset-0 bg-gradient-to-b from-[#020205] via-[#0c0c14] to-[#050505] z-0" />
+      {/* 1. VISUAL LAYERS (Background & Effects) */}
+      <CinematicOverlay />
+      <AmbientAurora color={currentMood.threeColor} />
+      
+      <div className="fixed inset-0 bg-gradient-to-b from-[#020205]/80 via-[#0c0c14]/50 to-[#050505]/90 z-0 pointer-events-none" />
       
       {/* 2. The Bola (3D Sphere & Stars) - NOW WITH DYNAMIC MOOD COLOR */}
       <TheBola isTalking={isTalking} moodColor={currentMood.threeColor} />

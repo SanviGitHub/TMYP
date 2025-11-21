@@ -17,11 +17,14 @@ const Navigation: React.FC<NavigationProps> = ({
 }) => {
   return (
     <aside className="fixed top-0 left-0 w-full h-16 md:h-full md:w-20 z-50 flex md:flex-col md:justify-start md:gap-5 justify-between items-center p-3 md:py-8 bg-bg/90 md:bg-bg/80 backdrop-blur-lg border-b md:border-b-0 md:border-r border-glass-border transition-all">
-      {/* Logo */}
-      <div className="text-white/30 font-title font-extrabold text-lg md:text-2xl tracking-widest md:[writing-mode:vertical-rl] md:rotate-180 select-none hidden md:block md:h-32 text-center">
+      {/* Logo with Glitch Effect */}
+      <div 
+        className="text-white/30 font-title font-extrabold text-lg md:text-2xl tracking-widest md:[writing-mode:vertical-rl] md:rotate-180 select-none hidden md:block md:h-32 text-center glitch-hover cursor-default transition-colors hover:text-white/80"
+        data-text="IYM PSICO"
+      >
         IYM PSICO
       </div>
-      <div className="md:hidden text-white/30 font-title font-extrabold text-lg">IYM</div>
+      <div className="md:hidden text-white/30 font-title font-extrabold text-lg glitch-hover" data-text="IYM">IYM</div>
 
       {/* Buttons */}
       <div className="flex md:flex-col gap-2 md:gap-5 overflow-x-auto md:overflow-visible w-full md:w-auto justify-end md:justify-start pr-2 md:pr-0">

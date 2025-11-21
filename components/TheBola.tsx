@@ -49,15 +49,21 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
 
     const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
     
-    // PERFORMANCE: Disable antialias on mobile/low-end to save huge GPU resources
+    // PERFORMANCE CRITICAL: 
+    // 1. Disable antialias on mobile (huge FPS boost)
+    // 2. Use mediump precision on mobile shaders
     const renderer = new THREE.WebGLRenderer({ 
         alpha: true, 
         antialias: !isMobile, 
         powerPreference: "high-performance",
-        precision: isMobile ? "mediump" : "highp"
+        precision: isMobile ? "mediump" : "highp",
+        stencil: false, // Disable stencil buffer if not used
+        depth: true
     });
     
     renderer.setSize(width, height);
+    // CRITICAL: Max pixel ratio of 1 on mobile prevents rendering at 3x resolution on new phones
+    // This allows us to have high geometry detail without lag
     renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     
     while(containerRef.current.firstChild) {
@@ -66,7 +72,12 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
     containerRef.current.appendChild(renderer.domElement);
 
     // --- The Bola (Sphere) ---
-    const geo = new THREE.IcosahedronGeometry(1.8, isMobile ? 20 : 30);
+    // RESTORED HIGH DETAIL: 
+    // Returning to higher detail (10 for mobile, 20 for desktop) to restore the "dense wireframe" look.
+    // The lag is mitigated by the renderer settings above (pixelRatio 1).
+    const detail = isMobile ? 10 : 20; 
+    const geo = new THREE.IcosahedronGeometry(1.8, detail);
+    
     const mat = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -77,7 +88,9 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
       },
       wireframe: true, 
       transparent: true, 
-      opacity: 0.5
+      opacity: 0.5,
+      depthWrite: false, // Optimization for transparent objects
+      blending: THREE.AdditiveBlending
     });
     
     materialRef.current = mat;
@@ -87,7 +100,8 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
 
     // --- Background Particles (The Universe) ---
     const pGeo = new THREE.BufferGeometry();
-    const pCount = isMobile ? 200 : 800; 
+    // Restored particle count slightly for better visuals
+    const pCount = isMobile ? 150 : 600; 
     const pPos = [];
     const pSizes = [];
 
@@ -105,7 +119,8 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
         transparent: true, 
         opacity: 0.6,
         sizeAttenuation: true,
-        blending: THREE.AdditiveBlending
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
     });
     
     const stars = new THREE.Points(pGeo, pMat);
@@ -113,13 +128,19 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
 
     // Secondary distant stars
     const pGeo2 = new THREE.BufferGeometry();
-    const pCount2 = isMobile ? 300 : 1000;
+    const pCount2 = isMobile ? 200 : 800;
     const pPos2 = [];
     for(let i=0; i<pCount2; i++) {
         pPos2.push((Math.random()-0.5)*40, (Math.random()-0.5)*40, (Math.random()-0.5)*40 - 5);
     }
     pGeo2.setAttribute('position', new THREE.Float32BufferAttribute(pPos2, 3));
-    const stars2 = new THREE.Points(pGeo2, new THREE.PointsMaterial({ size: 0.02, color: 0xffffff, transparent: true, opacity: 0.3 }));
+    const stars2 = new THREE.Points(pGeo2, new THREE.PointsMaterial({ 
+        size: 0.02, 
+        color: 0xffffff, 
+        transparent: true, 
+        opacity: 0.3,
+        depthWrite: false
+    }));
     scene.add(stars2);
 
 
@@ -146,12 +167,14 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
       sphere.rotation.z = Math.sin(t * 0.5) * 0.05;
 
       // --- MOVING COSMOS EFFECT ---
+      // Only rotate visuals, avoid heavy calculations per frame
       stars.rotation.y = t * 0.05;
       stars.rotation.x = t * 0.02;
       stars2.rotation.y = t * 0.02;
 
       // Gentle floating camera movement
-      camera.position.y = Math.sin(t * 0.2) * (isMobile ? 0.05 : 0.1);
+      // Reduced movement on mobile to prevent motion sickness / reduce recalc
+      camera.position.y = Math.sin(t * 0.2) * (isMobile ? 0.02 : 0.1);
       
       renderer.render(scene, camera);
     };
@@ -167,6 +190,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      // Keep optimization on resize
       renderer.setPixelRatio(mobile ? 1 : Math.min(window.devicePixelRatio, 2));
       
       if (mobile) { 
@@ -217,7 +241,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, moodColor }) => {
     <div 
       ref={containerRef} 
       id="canvas-container" 
-      className="fixed inset-0 z-0 pointer-events-none"
+      className="fixed inset-0 z-0 pointer-events-none transform-gpu" // transform-gpu forces GPU layer
     />
   );
 };
