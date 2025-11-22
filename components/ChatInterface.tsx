@@ -25,9 +25,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isTalking, onSe
   };
 
   return (
-    // PERFORMANCE: Reduced backdrop-blur to 'md' on mobile to save GPU resources.
+    // PERFORMANCE: Reduced backdrop-blur to 'sm' on mobile for smoother scrolling.
     // Uses 'h-[65dvh]' (Dynamic Viewport Height) to fix mobile browser bar issues.
-    <main className="fixed bottom-0 left-0 md:left-20 right-0 h-[65dvh] md:h-[80vh] md:static md:w-[480px] md:max-w-lg bg-glass/80 md:bg-glass/30 backdrop-blur-md md:backdrop-blur-3xl border-t md:border border-white/10 md:rounded-3xl flex flex-col shadow-[0_-8px_32px_rgba(0,0,0,0.5)] md:shadow-[0_8px_32px_rgba(0,0,0,0.3)] z-40 transition-all duration-500 ease-out md:mr-12 md:mb-8 overflow-hidden ring-1 ring-white/5">
+    <main className="fixed bottom-0 left-0 md:left-20 right-0 h-[65dvh] md:h-[80vh] md:static md:w-[480px] md:max-w-lg bg-glass/90 md:bg-glass/30 backdrop-blur-sm md:backdrop-blur-3xl border-t md:border border-white/10 md:rounded-3xl flex flex-col shadow-[0_-8px_32px_rgba(0,0,0,0.5)] md:shadow-[0_8px_32px_rgba(0,0,0,0.3)] z-40 transition-all duration-500 ease-out md:mr-12 md:mb-8 overflow-hidden ring-1 ring-white/5">
       
       {/* Header */}
       <header className="px-5 py-4 md:px-6 md:py-5 border-b border-white/5 flex items-center justify-between bg-white/5 shrink-0">

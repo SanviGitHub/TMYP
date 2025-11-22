@@ -30,8 +30,10 @@ const Navigation: React.FC<NavigationProps> = ({
       <div className="md:hidden text-white/40 font-title font-extrabold text-lg glitch-hover" data-text="IYM">IYM</div>
 
       {/* Buttons */}
-      <div className="flex md:flex-col gap-2 md:gap-5 overflow-x-auto md:overflow-visible w-full md:w-auto justify-end md:justify-start pr-2 md:pr-0">
+      {/* Mobile: Increased gap (gap-3 instead of gap-2) for better touch targets */}
+      <div className="flex-1 md:flex-none flex md:flex-col gap-3 md:gap-5 overflow-x-auto md:overflow-visible justify-start md:justify-start ml-4 md:ml-0 pr-2 md:pr-0 scrollbar-hide">
         
+        {/* SOUND BUTTON (Now First) */}
         <button 
           onClick={onToggleSound}
           className={`w-10 h-10 md:w-12 md:h-12 rounded-xl border border-glass-border flex items-center justify-center text-xl active:scale-95 transition-all duration-300 touch-manipulation shrink-0 ${isMuted ? 'bg-white/5 text-gray-500 hover:text-white' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.3)]'}`}
@@ -41,7 +43,7 @@ const Navigation: React.FC<NavigationProps> = ({
           {isMuted ? '🔇' : '🎧'}
         </button>
 
-        {/* MOOD BUTTON */}
+        {/* MOOD BUTTON (Now Second - Primary Action) */}
         <button 
           onClick={onMood}
           className={`
@@ -67,7 +69,7 @@ const Navigation: React.FC<NavigationProps> = ({
           {isZen ? '🧿' : '👁️'}
         </button>
 
-        {/* FOCUS BUTTON (NEW) */}
+        {/* FOCUS BUTTON */}
         <button 
           onClick={onFocus}
           className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/5 border border-glass-border flex items-center justify-center text-xl text-amber-200 hover:bg-amber-500/20 hover:text-amber-300 hover:border-amber-300 active:scale-95 transition-all duration-300 touch-manipulation shrink-0"

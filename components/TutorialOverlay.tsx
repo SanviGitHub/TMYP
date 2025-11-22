@@ -12,8 +12,8 @@ const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ isVisible }) => {
     // Fondo oscuro pero SIN desenfoque (backdrop-blur eliminado)
     <div className="fixed inset-0 z-[45] bg-black/60 animate-fade-in pointer-events-none transition-all duration-500">
       
-      {/* DESKTOP CONTAINER: Align with 2nd Button (Mood) approx 265px from top */}
-      <div className="hidden md:flex absolute top-[265px] left-24 flex-row items-center animate-pulse-slow">
+      {/* DESKTOP CONTAINER: Align with 2nd Button (Mood) approx 270px from top (Logo + Gap + Btn1 + Gap) */}
+      <div className="hidden md:flex absolute top-[270px] left-24 flex-row items-center animate-pulse-slow">
          {/* Text Bubble */}
          <div className="bg-white text-bg px-6 py-4 rounded-2xl shadow-xl border border-gray-200 max-w-xs relative">
             {/* Arrow indicator pointing Left */}
@@ -25,9 +25,9 @@ const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ isVisible }) => {
          </div>
       </div>
 
-      {/* MOBILE CONTAINER: Adjusted to align with Mood Button (2nd from left in group) */}
-      {/* Calculated position: ~220px from right edge (Mood button center) */}
-      <div className="md:hidden absolute top-[62px] right-[140px] flex flex-col items-center animate-pulse-slow">
+      {/* MOBILE CONTAINER: Adjusted to align with Mood Button (Now 2nd Button) */}
+      {/* Position: Logo (~40px) + Gap + Btn1 (~40px) + Gap -> Start ~100px. Center ~120px */}
+      <div className="md:hidden absolute top-[70px] left-28 flex flex-col items-center animate-pulse-slow z-50">
          {/* Arrow indicator pointing UP */}
          <div className="w-4 h-4 bg-white transform rotate-45 mb-[-6px] z-10 border-l border-t border-gray-200"></div>
          
