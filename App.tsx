@@ -11,6 +11,7 @@ import FocusModal from './components/FocusModal';
 import DailyChallenge from './components/DailyChallenge';
 import UpdateChecker from './components/UpdateChecker';
 import TutorialOverlay from './components/TutorialOverlay'; 
+import IntroLoader from './components/IntroLoader';
 import { Message, MoodOption } from './types';
 import { QUOTES, MOODS } from './constants';
 import { sendMessageToAI } from './services/aiService';
@@ -43,6 +44,9 @@ const AmbientAurora = ({ color }: { color: string }) => (
 );
 
 const App: React.FC = () => {
+  // Loading State
+  const [isLoading, setIsLoading] = useState(true);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTalking, setIsTalking] = useState(false);
   const [isThinking, setIsThinking] = useState(false); 
@@ -78,10 +82,10 @@ const App: React.FC = () => {
   }, [zenMode]);
 
   useEffect(() => {
-    if (!isMuted && !showTutorial) {
+    if (!isMuted && !showTutorial && !isLoading) {
         audioService.updateMood(currentMood.id);
     }
-  }, [currentMood, isMuted, showTutorial]);
+  }, [currentMood, isMuted, showTutorial, isLoading]);
 
   const startConversation = () => {
       typingTimeoutRef.current = setTimeout(() => {
@@ -152,6 +156,11 @@ const App: React.FC = () => {
           return newArr;
         });
 
+        // TRIGGER AUDIO EVERY 3 CHARACTERS TO AVOID MACHINE GUN EFFECT
+        if (i % 3 === 0) {
+            audioService.playTypingSound();
+        }
+
         i++;
         if (i < text.length) {
           typingTimeoutRef.current = setTimeout(typeChar, speed);
@@ -200,6 +209,11 @@ const App: React.FC = () => {
   return (
     <div className="relative w-full h-screen overflow-hidden bg-bg text-gray-100 font-body selection:bg-primary/30">
       
+      {/* LOADING SEQUENCE */}
+      {isLoading && (
+        <IntroLoader onComplete={() => setIsLoading(false)} />
+      )}
+
       {/* 1. VISUAL LAYERS */}
       <CinematicOverlay />
       <AmbientAurora color={currentMood.threeColor} />
@@ -223,7 +237,7 @@ const App: React.FC = () => {
       />
 
       {/* 3. Main Layout */}
-      <div className="relative z-20 w-full h-full flex flex-col md:flex-row max-w-[1800px] mx-auto pointer-events-none md:pl-20">
+      <div className={`relative z-20 w-full h-full flex flex-col md:flex-row max-w-[1800px] mx-auto pointer-events-none md:pl-20 transition-opacity duration-1000 ${isLoading ? 'opacity-0' : 'opacity-100'}`}>
         
         {/* Navigation */}
         <div className="pointer-events-auto z-50">
@@ -287,21 +301,26 @@ const App: React.FC = () => {
       </div>
 
       {/* 4. Modals & Overlays */}
-      <TutorialOverlay isVisible={showTutorial && !activeModal} />
+      {/* Don't show overlays while loading */}
+      {!isLoading && (
+        <>
+          <TutorialOverlay isVisible={showTutorial && !activeModal} />
 
-      <VentModal isOpen={activeModal === 'vent'} onClose={() => setActiveModal(null)} />
-      <SOSModal isOpen={activeModal === 'sos'} onClose={() => setActiveModal(null)} />
-      <BreathingModal isOpen={activeModal === 'breathe'} onClose={() => setActiveModal(null)} />
-      <FocusModal isOpen={activeModal === 'focus'} onClose={() => setActiveModal(null)} />
-      
-      <MoodSelector 
-        isOpen={activeModal === 'mood'} 
-        onClose={() => setActiveModal(null)} 
-        onSelectMood={handleMoodChange}
-        currentMoodId={currentMood.id}
-      />
+          <VentModal isOpen={activeModal === 'vent'} onClose={() => setActiveModal(null)} />
+          <SOSModal isOpen={activeModal === 'sos'} onClose={() => setActiveModal(null)} />
+          <BreathingModal isOpen={activeModal === 'breathe'} onClose={() => setActiveModal(null)} />
+          <FocusModal isOpen={activeModal === 'focus'} onClose={() => setActiveModal(null)} />
+          
+          <MoodSelector 
+            isOpen={activeModal === 'mood'} 
+            onClose={() => setActiveModal(null)} 
+            onSelectMood={handleMoodChange}
+            currentMoodId={currentMood.id}
+          />
 
-      <UpdateChecker />
+          <UpdateChecker />
+        </>
+      )}
 
     </div>
   );

@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import gsap from 'gsap';
+import { audioService } from '../services/audioService';
 
 interface TheBolaProps {
   isTalking: boolean;
@@ -18,18 +19,33 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
   const dustRef = useRef<THREE.Points | null>(null);
   const mainGroupRef = useRef<THREE.Group | null>(null);
 
+  // Animation Refs
+  const rotationSpeedRef = useRef(1.0); // Multiplier for base rotation
+  const volatilityRef = useRef(0.0); // Amount of chaos/vertex displacement
+  const previousMoodColor = useRef<string | null>(null);
+
   const [isMobileState, setIsMobileState] = useState(false);
 
   // Shader para la bola principal (Holográfico)
   const vertexShader = `
-    varying vec2 vUv; varying vec3 vNormal; uniform float uTime; uniform float uTalk; 
+    varying vec2 vUv; varying vec3 vNormal; 
+    uniform float uTime; 
+    uniform float uTalk; 
+    uniform float uVolatility; // Chaos factor
+
     void main() { 
       vUv = uv; 
       vNormal = normal; 
-      // Deformación orgánica basada en voz y tiempo
+      
+      // Deformación orgánica basada en voz
       float breath = sin(uTime * 0.5) * 0.03; 
       float speech = sin(position.y * 8.0 + uTime * 20.0) * uTalk * 0.08; 
-      vec3 newPos = position + normal * (breath + speech); 
+      
+      // Deformación caótica (Volatility)
+      // Crea picos agudos y movimiento rápido cuando uVolatility es alto
+      float chaos = sin(position.x * 15.0 + uTime * 40.0) * cos(position.z * 15.0 + uTime * 35.0) * uVolatility * 0.3;
+      
+      vec3 newPos = position + normal * (breath + speech + chaos); 
       gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0); 
     }
   `;
@@ -45,18 +61,61 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     }
   `;
 
-  // Control de Transición de Color (GSAP)
+  // Control de Transición de Color y Animación Compleja (Mood Change)
   useEffect(() => {
-    if (materialRef.current) {
-      const newColor = new THREE.Color(moodColor);
-      gsap.to(materialRef.current.uniforms.uColor.value, {
-        r: newColor.r, g: newColor.g, b: newColor.b, duration: 2.0, ease: "power2.inOut"
-      });
+    if (!materialRef.current || !mainGroupRef.current) return;
+
+    // Check if it's the first render
+    if (previousMoodColor.current === null) {
+        materialRef.current.uniforms.uColor.value.set(moodColor);
+        if (pulseRingRef.current) {
+             (pulseRingRef.current.material as THREE.MeshBasicMaterial).color.set(moodColor);
+        }
+        previousMoodColor.current = moodColor;
+        return;
     }
-    if (pulseRingRef.current) {
-       const ringMat = pulseRingRef.current.material as THREE.MeshBasicMaterial;
-       const newColor = new THREE.Color(moodColor);
-       gsap.to(ringMat.color, { r: newColor.r, g: newColor.g, b: newColor.b, duration: 2.0 });
+
+    // Only animate if color actually changed
+    if (previousMoodColor.current !== moodColor) {
+        // --- ANIMATION SEQUENCE ---
+        // 1. High Speed Spin & Chaos (1.5s)
+        // 2. Calm Down (1s)
+        // 3. Implode/Recreate (Explosion feel)
+
+        const tl = gsap.timeline();
+        
+        // Trigger Audio: Spin Up
+        audioService.playSpinUp();
+
+        // Phase 1: Chaos (0s -> 1.5s)
+        tl.to(rotationSpeedRef, { current: 25.0, duration: 1.5, ease: "power3.in" }, 0);
+        tl.to(volatilityRef, { current: 1.0, duration: 1.5, ease: "power2.in" }, 0);
+        
+        // Phase 2: Calm (1.5s -> 2.5s)
+        tl.call(() => audioService.playCalmDown(), undefined, 1.5);
+        
+        tl.to(rotationSpeedRef, { current: 0.2, duration: 1.0, ease: "power2.out" }, 1.5);
+        tl.to(volatilityRef, { current: 0.0, duration: 1.0, ease: "power2.out" }, 1.5);
+        // Shrink slightly in anticipation
+        tl.to(mainGroupRef.current.scale, { x: 0.01, y: 0.01, z: 0.01, duration: 1.0, ease: "back.in(1.5)" }, 1.5);
+
+        // Phase 3: Switch Color & Explode/Rebirth (2.5s)
+        tl.call(() => {
+            if (materialRef.current) materialRef.current.uniforms.uColor.value.set(moodColor);
+            if (pulseRingRef.current) {
+                 (pulseRingRef.current.material as THREE.MeshBasicMaterial).color.set(moodColor);
+            }
+            // Trigger Audio: Explosion
+            audioService.playExplosion();
+        }, undefined, 2.5);
+
+        // Rebirth (Explosion outwards)
+        tl.to(mainGroupRef.current.scale, { x: 1, y: 1, z: 1, duration: 0.8, ease: "elastic.out(1, 0.5)" }, 2.5);
+        
+        // Normalize Rotation
+        tl.to(rotationSpeedRef, { current: 1.0, duration: 1.5, ease: "power1.out" }, 2.5);
+
+        previousMoodColor.current = moodColor;
     }
   }, [moodColor]);
 
@@ -75,13 +134,11 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     
     const renderer = new THREE.WebGLRenderer({ 
         alpha: true, 
-        antialias: true, // Antialias ON para que las líneas se vean nítidas (Wireframe sin AA se ve feo)
+        antialias: true, 
         powerPreference: "high-performance",
     });
     
     renderer.setSize(width, height);
-    // MOBILE OPTIMIZATION: PixelRatio en 1 para móviles es la mejor optimización de rendimiento.
-    // Evita renderizar 3x o 4x pixeles en pantallas retina, ahorrando mucha batería.
     renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     
     while(containerRef.current.firstChild) {
@@ -95,8 +152,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     scene.add(mainGroup);
 
     // --- 1. The Bola (Sphere) ---
-    // Detail 2 en mobile mantiene la forma esférica sin ser tan costoso como 4.
-    // Detail 0 se veía muy "cuadrado" (diamante).
     const detail = isMobile ? 2 : 4; 
     const geo = new THREE.IcosahedronGeometry(1.8, detail * 5);
     
@@ -104,7 +159,8 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
       vertexShader, fragmentShader,
       uniforms: { 
         uTime: { value: 0 }, 
-        uTalk: { value: 0 }, 
+        uTalk: { value: 0 },
+        uVolatility: { value: 0 },
         uColor: { value: new THREE.Color(moodColor) }
       },
       wireframe: true, transparent: true, opacity: 0.6,
@@ -117,7 +173,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     mainGroup.add(sphere);
 
     // --- 2. Pulse Ring (Saturno) ---
-    // Restaurado en Mobile porque es icónico.
     const ringGeo = new THREE.TorusGeometry(3.5, 0.02, 32, 100);
     const ringMat = new THREE.MeshBasicMaterial({ 
         color: new THREE.Color(moodColor), 
@@ -129,9 +184,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     mainGroup.add(pulseRing);
 
     // --- 3. Particle Systems (Dust & Stars) ---
-    
-    // SYSTEM A: DUST (Polvo Cósmico)
-    // Cantidad reducida en mobile para optimizar CPU
     const dustCount = isMobile ? 60 : 600; 
     const dustGeo = new THREE.BufferGeometry();
     const dustPos = [];
@@ -152,7 +204,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     dustRef.current = dust;
     scene.add(dust);
 
-    // SYSTEM B: STARS (Estrellas)
     const starCount = isMobile ? 40 : 120;
     const starGeo = new THREE.BufferGeometry();
     const starPos = [];
@@ -170,7 +221,6 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
     starGeo.setAttribute('size', new THREE.Float32BufferAttribute(starSizes, 1));
 
-    // Shader para estrellas
     const starShaderMat = new THREE.ShaderMaterial({
         uniforms: { uTime: { value: 0 } },
         vertexShader: `
@@ -215,6 +265,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
 
       // Update Uniforms
       mat.uniforms.uTime.value = t;
+      mat.uniforms.uVolatility.value = volatilityRef.current;
       starShaderMat.uniforms.uTime.value = t;
 
       // Talking Animation
@@ -225,18 +276,23 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
       if (mainGroupRef.current) {
           mainGroupRef.current.position.y = Math.sin(t * 0.5) * 0.1;
           
+          // Apply Rotation with Multiplier (rotationSpeedRef)
+          const baseSpeed = zen ? 0.002 : 0.005;
+          const rotationDelta = baseSpeed * rotationSpeedRef.current;
+          
+          mainGroupRef.current.rotation.y += rotationDelta;
+          mainGroupRef.current.rotation.z += rotationDelta * 0.5;
+
           if (zen) {
-              mainGroupRef.current.rotation.z = THREE.MathUtils.lerp(mainGroupRef.current.rotation.z, -0.4, 0.02); 
-              mainGroupRef.current.rotation.y += 0.002;
+               // Additional zen rotation logic
           } else {
-              mainGroupRef.current.rotation.z = THREE.MathUtils.lerp(mainGroupRef.current.rotation.z, 0, 0.05);
-              
               if (isThinkingRef.current) {
                   sphere.rotation.y += 0.1;
                   mat.opacity = 0.8 + Math.sin(t * 10.0) * 0.1;
               } else {
                   sphere.rotation.y = t * 0.1;
                   sphere.rotation.x = Math.sin(t * 0.5) * 0.1;
+                  // Recover opacity if not thinking
                   mat.opacity += (0.6 - mat.opacity) * 0.05;
               }
           }
@@ -250,7 +306,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
 
       // 3. STARS & DUST ANIMATION
       if (starsRef.current && dustRef.current) {
-          const speed = zen ? 0.02 : 0.005; 
+          const speed = (zen ? 0.02 : 0.005) * rotationSpeedRef.current; // Sync background speed with chaos
           starsRef.current.rotation.y -= speed;
           dustRef.current.rotation.y -= speed * 0.5;
           dustRef.current.position.y = Math.sin(t * 0.2) * 0.5;

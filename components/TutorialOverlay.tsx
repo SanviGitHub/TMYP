@@ -20,7 +20,7 @@ const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ isVisible }) => {
             <div className="absolute top-1/2 -left-2 w-4 h-4 bg-white transform -translate-y-1/2 rotate-45 border-l border-b border-gray-200"></div>
             <h3 className="font-title font-bold text-xl mb-1">¿Cómo te sentís?</h3>
             <p className="font-body text-sm leading-tight text-gray-800">
-                Seleccioná tu estado para empezar.
+                Tocá el "🎭" para elegir tu estado y comenzar.
             </p>
          </div>
       </div>
@@ -32,10 +32,10 @@ const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ isVisible }) => {
          <div className="w-4 h-4 bg-white transform rotate-45 mb-[-6px] z-10 border-l border-t border-gray-200"></div>
          
          {/* Text Bubble - Width fixed to fit on small screens */}
-         <div className="bg-white text-bg px-4 py-3 rounded-2xl shadow-xl border border-gray-200 w-[160px] text-center relative">
+         <div className="bg-white text-bg px-4 py-3 rounded-2xl shadow-xl border border-gray-200 w-[180px] text-center relative">
             <h3 className="font-title font-bold text-lg mb-1">¿Cómo te sentís?</h3>
             <p className="font-body text-xs leading-tight text-gray-800">
-                Tocá la máscara para elegir tu estado.
+                Tocá el "🎭" para elegir tu estado y comenzar.
             </p>
          </div>
       </div>

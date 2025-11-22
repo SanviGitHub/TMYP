@@ -54,7 +54,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isTalking, onSe
             </div>
           </div>
         </div>
-        <div className="text-xs text-white/20 font-body font-light tracking-widest hidden md:block">VIANA & GOMEZ</div>
+        {/* Creator Names - Visible on mobile as requested */}
+        <div className="text-[0.6rem] md:text-xs text-white/20 font-body font-light tracking-widest block text-right">
+            SANTINO V. & DANTE G.
+        </div>
       </header>
 
       {/* Feed */}
