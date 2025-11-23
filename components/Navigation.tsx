@@ -8,15 +8,15 @@ interface NavigationProps {
   onBreathe: () => void;
   onMood: () => void;
   onFocus: () => void;
-  onToggleSound: () => void;
+  onSoundSettings: () => void;
   onToggleZen: () => void;
-  isMuted: boolean;
+  onJournal: () => void; // New prop
   isZen: boolean;
   highlightMood?: boolean;
 }
 
 const Navigation: React.FC<NavigationProps> = ({ 
-  onVent, onReset, onSOS, onBreathe, onMood, onFocus, onToggleSound, onToggleZen, isMuted, isZen, highlightMood 
+  onVent, onReset, onSOS, onBreathe, onMood, onFocus, onSoundSettings, onToggleZen, onJournal, isZen, highlightMood 
 }) => {
   return (
     <aside className="fixed top-0 left-0 w-full h-16 md:h-full md:w-20 z-50 flex md:flex-col md:justify-start md:gap-5 justify-between items-center p-3 md:py-8 bg-bg/80 md:bg-bg/60 backdrop-blur-lg border-b md:border-b-0 md:border-r border-glass-border transition-all">
@@ -30,20 +30,19 @@ const Navigation: React.FC<NavigationProps> = ({
       <div className="md:hidden text-white/40 font-title font-extrabold text-lg glitch-hover" data-text="IYM">IYM</div>
 
       {/* Buttons */}
-      {/* Mobile: Increased gap (gap-3 instead of gap-2) for better touch targets */}
       <div className="flex-1 md:flex-none flex md:flex-col gap-3 md:gap-5 overflow-x-auto md:overflow-visible justify-start md:justify-start ml-4 md:ml-0 pr-2 md:pr-0 scrollbar-hide">
         
-        {/* SOUND BUTTON (Now First) */}
+        {/* SOUND SETTINGS BUTTON */}
         <button 
-          onClick={onToggleSound}
-          className={`w-10 h-10 md:w-12 md:h-12 rounded-xl border border-glass-border flex items-center justify-center text-xl active:scale-95 transition-all duration-300 touch-manipulation shrink-0 ${isMuted ? 'bg-white/5 text-gray-500 hover:text-white' : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/50 shadow-[0_0_10px_rgba(99,102,241,0.3)]'}`}
-          title={isMuted ? "Activar Sonido Ambiente" : "Silenciar"}
-          aria-label="Sonido Ambiente"
+          onClick={onSoundSettings}
+          className={`w-10 h-10 md:w-12 md:h-12 rounded-xl border border-glass-border flex items-center justify-center text-xl active:scale-95 transition-all duration-300 touch-manipulation shrink-0 bg-indigo-500/10 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500/20 hover:text-white`}
+          title="Configuración de Sonido"
+          aria-label="Configuración de Sonido"
         >
-          {isMuted ? '🔇' : '🎧'}
+          🎚️
         </button>
 
-        {/* MOOD BUTTON (Now Second - Primary Action) */}
+        {/* MOOD BUTTON */}
         <button 
           onClick={onMood}
           className={`
@@ -57,6 +56,16 @@ const Navigation: React.FC<NavigationProps> = ({
           aria-label="Cambiar estado de ánimo"
         >
           🎭
+        </button>
+        
+        {/* JOURNAL BUTTON (NEW) */}
+        <button 
+          onClick={onJournal}
+          className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-white/5 border border-glass-border flex items-center justify-center text-xl text-blue-200 hover:bg-blue-500/20 hover:text-blue-300 hover:border-blue-300 active:scale-95 transition-all duration-300 touch-manipulation shrink-0"
+          title="Diario Holográfico"
+          aria-label="Diario"
+        >
+          💾
         </button>
 
         {/* ZEN MODE BUTTON */}

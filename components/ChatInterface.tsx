@@ -10,8 +10,47 @@ interface ChatInterfaceProps {
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isTalking, onSendMessage }) => {
   const [input, setInput] = useState('');
+  const [isListening, setIsListening] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   
+  // Speech Recognition Reference
+  const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Initialize Speech Recognition if available
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'es-ES';
+        recognition.interimResults = false;
+        
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onerror = () => setIsListening(false);
+        
+        recognition.onresult = (event: any) => {
+            const transcript = event.results[0][0].transcript;
+            if (transcript) {
+                setInput(prev => (prev ? prev + ' ' + transcript : transcript));
+            }
+        };
+        recognitionRef.current = recognition;
+    }
+  }, []);
+
+  const toggleListening = () => {
+      if (!recognitionRef.current) {
+          alert("Tu navegador no soporta entrada de voz.");
+          return;
+      }
+      if (isListening) {
+          recognitionRef.current.stop();
+      } else {
+          recognitionRef.current.start();
+      }
+  };
+
   // Auto-scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -26,8 +65,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isTalking, onSe
 
   return (
     // PERFORMANCE: Reduced backdrop-blur to 'sm' on mobile for smoother scrolling.
-    // Uses 'h-[65dvh]' (Dynamic Viewport Height) to fix mobile browser bar issues.
-    <main className="fixed bottom-0 left-0 md:left-20 right-0 h-[65dvh] md:h-[80vh] md:static md:w-[480px] md:max-w-lg bg-glass/90 md:bg-glass/30 backdrop-blur-sm md:backdrop-blur-3xl border-t md:border border-white/10 md:rounded-3xl flex flex-col shadow-[0_-8px_32px_rgba(0,0,0,0.5)] md:shadow-[0_8px_32px_rgba(0,0,0,0.3)] z-40 transition-all duration-500 ease-out md:mr-12 md:mb-8 overflow-hidden ring-1 ring-white/5">
+    <main className="fixed bottom-0 left-0 md:left-20 right-0 h-[55dvh] md:h-[80vh] md:static md:w-[480px] md:max-w-lg bg-glass/90 md:bg-glass/30 backdrop-blur-sm md:backdrop-blur-3xl border-t md:border border-white/10 md:rounded-3xl flex flex-col shadow-[0_-8px_32px_rgba(0,0,0,0.5)] md:shadow-[0_8px_32px_rgba(0,0,0,0.3)] z-40 transition-all duration-500 ease-out md:mr-12 md:mb-8 overflow-hidden ring-1 ring-white/5">
       
       {/* Header */}
       <header className="px-5 py-4 md:px-6 md:py-5 border-b border-white/5 flex items-center justify-between bg-white/5 shrink-0">
@@ -54,9 +92,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isTalking, onSe
             </div>
           </div>
         </div>
-        {/* Creator Names - Visible on mobile as requested */}
-        <div className="text-[0.6rem] md:text-xs text-white/20 font-body font-light tracking-widest block text-right">
-            SANTINO V. & DANTE G.
+        <div className="text-[0.65rem] md:text-xs text-white/30 font-body font-semibold tracking-widest block text-right">
+            (SANTINO V. & DANTE G.)
         </div>
       </header>
 
@@ -93,16 +130,36 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, isTalking, onSe
       {/* Input Area */}
       <div className="p-3 md:p-5 bg-black/60 md:bg-black/40 border-t border-white/5 backdrop-blur-md shrink-0 pb-safe-area">
         <form onSubmit={handleSubmit} className="relative flex items-center gap-2 md:gap-3 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 md:px-4 md:py-2 focus-within:border-accent/50 focus-within:bg-white/10 transition-all duration-300 shadow-inner focus-within:shadow-[0_0_20px_rgba(0,255,242,0.1)]">
+          
+          {/* VOICE BUTTON */}
+          <button
+            type="button"
+            onClick={toggleListening}
+            disabled={isTalking}
+            className={`
+                w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 relative
+                ${isListening ? 'text-red-400 bg-red-500/20' : 'text-white/40 hover:text-white hover:bg-white/10'}
+            `}
+            title="Usar Voz"
+          >
+            {isListening ? (
+                <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-20"></span>
+                    🎙️
+                </>
+            ) : '🎙️'}
+          </button>
+
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={isTalking ? "Escuchando..." : "Escribí tu mensaje..."}
+            placeholder={isListening ? "Escuchando..." : (isTalking ? "Procesando..." : "Escribí o hablá...")}
             className="flex-1 bg-transparent border-none outline-none text-white placeholder-white/20 font-body text-sm md:text-base py-2"
             disabled={isTalking}
-            // Prevent zoom on mobile
             style={{fontSize: '16px'}}
           />
+          
           <button 
             type="submit" 
             disabled={!input.trim() || isTalking}

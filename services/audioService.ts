@@ -3,20 +3,48 @@ import { MOODS } from '../constants';
 
 export class BioAudioEngine {
   private ctx: AudioContext | null = null;
+  
+  // Mix Buses
   private masterGain: GainNode | null = null;
+  private bgGain: GainNode | null = null;      // Música de fondo (Ambient + Zen + Notes + Binaural)
+  private typingGain: GainNode | null = null;  // Sonido de escritura
+  private sfxGain: GainNode | null = null;     // Efectos especiales (transiciones, alertas)
+
+  // Effects
   private delayNode: DelayNode | null = null;
   private reverbNode: ConvolverNode | null = null;
-  private isMuted: boolean = true;
+  private reverbGain: GainNode | null = null;
+
+  // State
+  private isMuted: boolean = false; 
   private isPlaying: boolean = false;
+  private isZen: boolean = false;
   private currentMoodId: string = 'neutral';
   private nextNoteTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // SFX Oscillators references to stop them if needed
+  // Default Volumes
+  private volumes = {
+    master: 0.5,
+    bg: 0.6,
+    typing: 0.3,
+    sfx: 0.5
+  };
+
+  // Oscillators References
+  private droneOsc: OscillatorNode | null = null;
+  private droneGain: GainNode | null = null;
+  private droneLFO: OscillatorNode | null = null;
   private spinOsc: OscillatorNode | null = null;
   private spinGain: GainNode | null = null;
 
+  // --- BINAURAL BEATS ENGINE ---
+  private binauralLeft: OscillatorNode | null = null;
+  private binauralRight: OscillatorNode | null = null;
+  private binauralGain: GainNode | null = null;
+  private currentBinauralType: 'gamma' | 'alpha' | 'theta' | null = null;
+
   constructor() {
-    // AudioContext initialization is deferred
+    // Initialization deferred
   }
 
   private init() {
@@ -25,43 +53,80 @@ export class BioAudioEngine {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     this.ctx = new AudioContextClass();
     
-    // Master Volume
+    // --- 1. Master Output ---
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.4; 
+    this.masterGain.gain.value = this.volumes.master;
+    this.masterGain.connect(this.ctx.destination);
 
-    // --- EFFECTS CHAIN ---
-    
-    // 1. Delay (Echo)
-    this.delayNode = this.ctx.createDelay();
-    this.delayNode.delayTime.value = 0.4; 
-    const feedback = this.ctx.createGain();
-    feedback.gain.value = 0.3;
-    this.delayNode.connect(feedback);
-    feedback.connect(this.delayNode);
-
-    // 2. Simple Reverb (Impulse Response simulation)
-    // Creating a synthetic buffer for reverb
+    // --- 2. Effects Setup ---
+    // Reverb
     const sampleRate = this.ctx.sampleRate;
-    const length = sampleRate * 2.0; // 2 seconds tail
+    const length = sampleRate * 2.5; 
     const impulse = this.ctx.createBuffer(2, length, sampleRate);
     for (let channel = 0; channel < 2; channel++) {
       const channelData = impulse.getChannelData(channel);
       for (let i = 0; i < length; i++) {
-        // Exponential decay noise
-        channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 4);
+        channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 3);
       }
     }
     this.reverbNode = this.ctx.createConvolver();
     this.reverbNode.buffer = impulse;
-    const reverbGain = this.ctx.createGain();
-    reverbGain.gain.value = 0.4; // Wet mix
-
-    // Connections
-    this.delayNode.connect(this.masterGain);
-    this.reverbNode.connect(reverbGain);
-    reverbGain.connect(this.masterGain);
     
-    this.masterGain.connect(this.ctx.destination);
+    this.reverbGain = this.ctx.createGain();
+    this.reverbGain.gain.value = 0.6; 
+    this.reverbNode.connect(this.reverbGain);
+    this.reverbGain.connect(this.masterGain); // Reverb wet signal goes to master
+
+    // Delay
+    this.delayNode = this.ctx.createDelay();
+    this.delayNode.delayTime.value = 0.4; 
+    const feedback = this.ctx.createGain();
+    feedback.gain.value = 0.2; 
+    this.delayNode.connect(feedback);
+    feedback.connect(this.delayNode);
+    // Delay wet signal goes to master (through a small attenuation)
+    const delayOut = this.ctx.createGain();
+    delayOut.gain.value = 0.5;
+    this.delayNode.connect(delayOut);
+    delayOut.connect(this.masterGain);
+
+    // --- 3. Channel Buses (The Mixer) ---
+    
+    // A. Background Bus (Music, Zen, Notes, Binaural)
+    // CRITICAL: This bus controls the source volume. 
+    this.bgGain = this.ctx.createGain();
+    this.bgGain.gain.value = this.volumes.bg;
+    
+    this.bgGain.connect(this.masterGain); // Dry path
+    
+    // Aux Sends for Background
+    const bgReverbSend = this.ctx.createGain();
+    bgReverbSend.gain.value = 0.5; 
+    this.bgGain.connect(bgReverbSend);
+    bgReverbSend.connect(this.reverbNode);
+
+    const bgDelaySend = this.ctx.createGain();
+    bgDelaySend.gain.value = 0.3; 
+    this.bgGain.connect(bgDelaySend);
+    bgDelaySend.connect(this.delayNode);
+
+    // B. Typing Bus
+    this.typingGain = this.ctx.createGain();
+    this.typingGain.gain.value = this.volumes.typing;
+    this.typingGain.connect(this.masterGain);
+    const typingReverbSend = this.ctx.createGain();
+    typingReverbSend.gain.value = 0.1;
+    this.typingGain.connect(typingReverbSend);
+    typingReverbSend.connect(this.reverbNode);
+
+    // C. SFX Bus
+    this.sfxGain = this.ctx.createGain();
+    this.sfxGain.gain.value = this.volumes.sfx;
+    this.sfxGain.connect(this.masterGain);
+    const sfxReverbSend = this.ctx.createGain();
+    sfxReverbSend.gain.value = 0.4;
+    this.sfxGain.connect(sfxReverbSend);
+    sfxReverbSend.connect(this.reverbNode);
   }
 
   public async start() {
@@ -74,221 +139,395 @@ export class BioAudioEngine {
     
     this.isPlaying = true;
     this.isMuted = false;
+    this.updateMasterGain(); 
     this.scheduleNextNote();
+    
+    if (this.isZen) this.startZenDrone();
+    if (this.currentBinauralType) this.playBinauralBeat(this.currentBinauralType);
   }
 
   public stop() {
     this.isPlaying = false;
-    this.isMuted = true;
     if (this.nextNoteTimer) clearTimeout(this.nextNoteTimer);
+    this.stopZenDrone();
+    this.stopBinauralBeat();
+  }
+
+  // --- VOLUME CONTROLS ---
+
+  public setVolume(channel: 'master' | 'bg' | 'typing' | 'sfx', value: number) {
+    const v = Math.max(0, Math.min(1, value));
+    this.volumes[channel] = v;
+
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
     
-    // Fade out master
-    if (this.masterGain && this.ctx) {
-       this.masterGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.5);
+    switch (channel) {
+      case 'master':
+        if (!this.isMuted && this.masterGain) {
+            this.masterGain.gain.setTargetAtTime(v, t, 0.1);
+        }
+        break;
+      case 'bg':
+        if (this.bgGain) this.bgGain.gain.setTargetAtTime(v, t, 0.1);
+        break;
+      case 'typing':
+        if (this.typingGain) this.typingGain.gain.setTargetAtTime(v, t, 0.1);
+        break;
+      case 'sfx':
+        if (this.sfxGain) this.sfxGain.gain.setTargetAtTime(v, t, 0.1);
+        break;
     }
   }
 
-  public toggle() {
-    if (this.isMuted) {
+  public getVolumes() {
+    return { ...this.volumes };
+  }
+
+  public toggleMute(): boolean {
+    this.isMuted = !this.isMuted;
+    this.updateMasterGain();
+    if (!this.isMuted && !this.isPlaying) {
         this.start();
-        if (this.masterGain && this.ctx) {
-            this.masterGain.gain.setTargetAtTime(0.4, this.ctx.currentTime, 0.5);
-        }
-        this.isMuted = false;
-    } else {
-        this.stop();
-        this.isMuted = true;
     }
     return this.isMuted;
+  }
+
+  private updateMasterGain() {
+      if (!this.ctx || !this.masterGain) return;
+      const t = this.ctx.currentTime;
+      const target = this.isMuted ? 0 : this.volumes.master;
+      this.masterGain.gain.setTargetAtTime(target, t, 0.2);
   }
 
   public updateMood(moodId: string) {
     this.currentMoodId = moodId;
   }
 
-  // --- AMBIENT MUSIC GENERATOR ---
+  public setZenMode(enabled: boolean) {
+      this.isZen = enabled;
+      if (this.isPlaying && !this.isMuted) {
+          if (enabled) {
+              this.startZenDrone();
+          } else {
+              this.stopZenDrone();
+          }
+      }
+  }
 
+  // --- BINAURAL BEATS LOGIC ---
+  public playBinauralBeat(type: 'gamma' | 'alpha' | 'theta') {
+    if (!this.ctx || !this.bgGain) return;
+    
+    // Stop previous if exists
+    this.stopBinauralBeat();
+    this.currentBinauralType = type;
+
+    // Frequencies (Carrier ~200Hz is comfortable)
+    const carrier = 200;
+    let beatFreq = 0;
+    
+    switch(type) {
+        case 'gamma': beatFreq = 40; break; // High Focus
+        case 'alpha': beatFreq = 10; break; // Relax/Zen
+        case 'theta': beatFreq = 4; break;  // Deep Med
+    }
+
+    const t = this.ctx.currentTime;
+
+    // Create Left & Right Oscillators
+    this.binauralLeft = this.ctx.createOscillator();
+    this.binauralRight = this.ctx.createOscillator();
+    this.binauralLeft.type = 'sine';
+    this.binauralRight.type = 'sine';
+
+    this.binauralLeft.frequency.value = carrier;
+    this.binauralRight.frequency.value = carrier + beatFreq;
+
+    // Create Stereo Panners
+    const pannerLeft = this.ctx.createStereoPanner();
+    const pannerRight = this.ctx.createStereoPanner();
+    pannerLeft.pan.value = -1; // Full Left
+    pannerRight.pan.value = 1; // Full Right
+
+    // Gain for Binaural (Subtle)
+    this.binauralGain = this.ctx.createGain();
+    this.binauralGain.gain.value = 0; // Start silent
+    this.binauralGain.gain.linearRampToValueAtTime(0.15, t + 2.0); // Fade in
+
+    // Routing
+    this.binauralLeft.connect(pannerLeft);
+    this.binauralRight.connect(pannerRight);
+    
+    pannerLeft.connect(this.binauralGain);
+    pannerRight.connect(this.binauralGain);
+    
+    // Connect to Background Bus (Controlled by Music Volume)
+    this.binauralGain.connect(this.bgGain);
+
+    this.binauralLeft.start(t);
+    this.binauralRight.start(t);
+  }
+
+  public stopBinauralBeat() {
+    this.currentBinauralType = null;
+    if (this.binauralLeft) {
+        const t = this.ctx?.currentTime || 0;
+        this.binauralGain?.gain.setTargetAtTime(0, t, 0.5);
+        setTimeout(() => {
+            this.binauralLeft?.stop();
+            this.binauralRight?.stop();
+            this.binauralLeft?.disconnect();
+            this.binauralRight?.disconnect();
+            this.binauralGain?.disconnect();
+            this.binauralLeft = null;
+            this.binauralRight = null;
+            this.binauralGain = null;
+        }, 550);
+    }
+  }
+  
+  public getCurrentBinaural() {
+      return this.currentBinauralType;
+  }
+
+  // --- ZEN MODE DRONE ---
+  private startZenDrone() {
+      if (!this.ctx || !this.bgGain || this.droneOsc) return;
+
+      const t = this.ctx.currentTime;
+      
+      this.droneOsc = this.ctx.createOscillator();
+      this.droneOsc.type = 'sawtooth';
+      this.droneOsc.frequency.setValueAtTime(55, t); 
+
+      this.droneLFO = this.ctx.createOscillator();
+      this.droneLFO.type = 'sine';
+      this.droneLFO.frequency.value = 0.2; 
+
+      const lfoGain = this.ctx.createGain();
+      lfoGain.gain.value = 500; 
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 200; 
+      filter.Q.value = 1;
+
+      this.droneGain = this.ctx.createGain();
+      this.droneGain.gain.setValueAtTime(0, t);
+      this.droneGain.gain.linearRampToValueAtTime(0.25, t + 2.0); 
+
+      this.droneLFO.connect(lfoGain);
+      lfoGain.connect(filter.frequency);
+
+      this.droneOsc.connect(filter);
+      filter.connect(this.droneGain);
+      
+      this.droneGain.connect(this.bgGain); 
+
+      this.droneOsc.start(t);
+      this.droneLFO.start(t);
+  }
+
+  private stopZenDrone() {
+      if (!this.ctx || !this.droneOsc || !this.droneGain) return;
+      const t = this.ctx.currentTime;
+      this.droneGain.gain.setTargetAtTime(0, t, 1.0);
+      setTimeout(() => {
+          this.droneOsc?.stop();
+          this.droneLFO?.stop();
+          this.droneOsc?.disconnect();
+          this.droneLFO?.disconnect();
+          this.droneGain?.disconnect();
+          this.droneOsc = null;
+          this.droneLFO = null;
+          this.droneGain = null;
+      }, 1200);
+  }
+
+  // --- AMBIENT MUSIC ---
   private scheduleNextNote() {
     if (!this.isPlaying || !this.ctx) return;
 
     const mood = MOODS.find(m => m.id === this.currentMoodId) || MOODS[0];
-    const scale = mood.scale || [220, 440];
-    const bpm = mood.bpm || 60;
+    let scale = mood.scale || [220, 440];
+    let bpm = mood.bpm || 60;
+
+    if (this.isZen) {
+        bpm = 240; 
+        scale = [523.25, 587.33, 659.25, 739.99, 783.99, 880.00, 1046.50]; 
+    }
     
     const freq = scale[Math.floor(Math.random() * scale.length)];
-    this.playTone(freq);
+    const finalFreq = (Math.random() > 0.7 && !this.isZen) ? freq / 2 : freq;
+    
+    this.playTone(finalFreq);
 
     const beatDuration = (60000 / bpm); 
-    const randomOffset = (Math.random() - 0.5) * (beatDuration * 0.5);
+    const randomOffset = this.isZen ? 0 : (Math.random() - 0.5) * (beatDuration * 0.5);
     const nextTime = beatDuration + randomOffset;
 
     this.nextNoteTimer = setTimeout(() => this.scheduleNextNote(), nextTime);
   }
 
   private playTone(freq: number) {
-    if (!this.ctx || !this.masterGain || !this.delayNode || !this.reverbNode) return;
-    if (this.isMuted) return;
+    if (!this.ctx || !this.bgGain) return;
 
     const t = this.ctx.currentTime;
     
-    // Create two oscillators for a thicker, warmer sound (Detuned)
     const osc1 = this.ctx.createOscillator();
     const osc2 = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
 
-    osc1.type = 'sine';
-    osc2.type = 'triangle';
+    if (this.isZen) {
+        osc1.type = 'sawtooth';
+        osc2.type = 'square';
+        osc2.detune.value = 10; 
+        
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.08, t + 0.05); 
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3); 
 
-    osc1.frequency.setValueAtTime(freq, t);
-    osc2.frequency.setValueAtTime(freq, t);
-    osc2.detune.value = 5; // Slight detune for warmth
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(freq * 4, t);
+        filter.frequency.exponentialRampToValueAtTime(freq, t + 0.2);
 
-    // Envelope
-    gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.08, t + 0.5); // Slow attack
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 4.0); // Long tail
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
 
-    osc1.connect(gain);
-    osc2.connect(gain);
+    } else {
+        osc1.type = 'sine';
+        osc2.type = 'triangle';
+        osc2.detune.value = 4; 
+
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.1, t + 1.0); 
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 6.0); 
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 800;
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+    }
     
-    gain.connect(this.masterGain);
-    gain.connect(this.delayNode);
-    gain.connect(this.reverbNode);
-
+    gain.connect(this.bgGain);
+    
     osc1.start(t);
     osc2.start(t);
-    osc1.stop(t + 4.5);
-    osc2.stop(t + 4.5);
+    
+    const stopTime = this.isZen ? t + 0.5 : t + 7.0;
+    osc1.stop(stopTime);
+    osc2.stop(stopTime);
 
-    setTimeout(() => { osc1.disconnect(); osc2.disconnect(); gain.disconnect(); }, 5000);
+    setTimeout(() => { osc1.disconnect(); osc2.disconnect(); gain.disconnect(); }, (this.isZen ? 600 : 7500));
   }
 
-  // --- SFX: TYPING (Bubble/Click) ---
+  // --- SFX: TYPING ---
   public playTypingSound() {
-    if (!this.ctx || this.isMuted) return;
-    
+    if (!this.ctx || !this.typingGain) return;
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-
-    // Very short sine blip, randomized pitch to sound organic
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(600 + Math.random() * 200, t);
-    
+    osc.frequency.setValueAtTime(800 + Math.random() * 300, t);
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.02, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-
+    gain.gain.linearRampToValueAtTime(0.05, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    
     osc.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(this.typingGain);
 
     osc.start(t);
     osc.stop(t + 0.1);
-    
     setTimeout(() => { osc.disconnect(); gain.disconnect(); }, 200);
   }
 
-  // --- SFX: SPIN UP (Turbine/Rising) ---
+  // --- SFX: SPIN UP ---
   public playSpinUp() {
-    if (!this.ctx || this.isMuted) return;
-
+    if (!this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
     this.spinOsc = this.ctx.createOscillator();
     this.spinGain = this.ctx.createGain();
-
-    this.spinOsc.type = 'sawtooth'; // Richer harmonic content
-    // Low pass filter to keep it subtle
+    this.spinOsc.type = 'sawtooth'; 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(200, t);
-    filter.frequency.exponentialRampToValueAtTime(2000, t + 1.5); // Filter opens up
-
-    this.spinOsc.frequency.setValueAtTime(100, t);
-    this.spinOsc.frequency.exponentialRampToValueAtTime(400, t + 1.5); // Pitch rises
-
+    filter.frequency.setValueAtTime(100, t);
+    filter.frequency.exponentialRampToValueAtTime(1500, t + 2.0); 
+    this.spinOsc.frequency.setValueAtTime(80, t);
+    this.spinOsc.frequency.exponentialRampToValueAtTime(300, t + 2.0); 
     this.spinGain.gain.setValueAtTime(0, t);
-    this.spinGain.gain.linearRampToValueAtTime(0.1, t + 0.5);
     this.spinGain.gain.linearRampToValueAtTime(0.1, t + 1.0);
-    // Note: We don't stop it here, we let playCalmDown take over or fade it
     
     this.spinOsc.connect(filter);
     filter.connect(this.spinGain);
-    this.spinGain.connect(this.masterGain);
-
+    this.spinGain.connect(this.sfxGain);
+    
     this.spinOsc.start(t);
   }
 
-  // --- SFX: CALM DOWN (Filter Sweep Down) ---
+  // --- SFX: CALM DOWN ---
   public playCalmDown() {
-    if (!this.ctx || this.isMuted || !this.spinOsc || !this.spinGain) return;
-
+    if (!this.ctx || !this.spinOsc || !this.spinGain) return;
     const t = this.ctx.currentTime;
-    
-    // Ramp down pitch
-    this.spinOsc.frequency.setTargetAtTime(50, t, 0.2);
-    // Fade out volume
-    this.spinGain.gain.setTargetAtTime(0, t, 0.3);
-
+    this.spinOsc.frequency.setTargetAtTime(50, t, 0.5);
+    this.spinGain.gain.setTargetAtTime(0, t, 0.5);
     setTimeout(() => {
         this.spinOsc?.stop();
         this.spinOsc?.disconnect();
         this.spinGain?.disconnect();
         this.spinOsc = null;
         this.spinGain = null;
-    }, 1000);
+    }, 1500);
   }
 
-  // --- SFX: EXPLOSION (Ethereal Chime) ---
+  // --- SFX: EXPLOSION ---
   public playExplosion() {
-    if (!this.ctx || this.isMuted) return;
-    
+    if (!this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
     
-    // 1. Noise Burst (The "Pop")
-    const bufferSize = this.ctx.sampleRate * 0.5; // 0.5 sec noise
+    // Noise Burst
+    const bufferSize = this.ctx.sampleRate * 1.0; 
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-    }
-    
+    for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; }
     const noise = this.ctx.createBufferSource();
     noise.buffer = buffer;
     const noiseFilter = this.ctx.createBiquadFilter();
     noiseFilter.type = 'lowpass';
-    noiseFilter.frequency.value = 1000;
+    noiseFilter.frequency.setValueAtTime(500, t);
+    noiseFilter.frequency.exponentialRampToValueAtTime(100, t + 1.0); 
     const noiseGain = this.ctx.createGain();
-    
-    noiseGain.gain.setValueAtTime(0.1, t);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    noiseGain.gain.setValueAtTime(0.2, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
     
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
-    noiseGain.connect(this.masterGain);
+    noiseGain.connect(this.sfxGain); 
     noise.start(t);
 
-    // 2. Harmonic Chime (The "Magic")
+    // Harmonic Ring
     const mood = MOODS.find(m => m.id === this.currentMoodId) || MOODS[0];
-    const rootFreq = mood.scale[0] * 2; // High octave
-
-    [rootFreq, rootFreq * 1.5, rootFreq * 2].forEach((freq, i) => {
-        const osc = this.ctx.createOscillator();
-        const g = this.ctx.createGain();
-        
+    const baseFreq = mood.scale[0] * 2; 
+    [baseFreq, baseFreq * 1.25, baseFreq * 1.5, baseFreq * 2].forEach((freq, i) => {
+        const osc = this.ctx!.createOscillator();
+        const g = this.ctx!.createGain();
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, t);
-        
         g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(0.1, t + 0.05);
-        g.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
+        g.gain.linearRampToValueAtTime(0.08, t + 0.1 + (i * 0.05)); 
+        g.gain.exponentialRampToValueAtTime(0.001, t + 4.0);
         
         osc.connect(g);
-        g.connect(this.masterGain);
-        if (this.reverbNode) g.connect(this.reverbNode); // Send to reverb
+        g.connect(this.sfxGain!);
         
         osc.start(t);
-        osc.stop(t + 3.5);
-        setTimeout(() => { osc.disconnect(); g.disconnect(); }, 4000);
+        osc.stop(t + 4.5);
+        setTimeout(() => { osc.disconnect(); g.disconnect(); }, 5000);
     });
   }
 }

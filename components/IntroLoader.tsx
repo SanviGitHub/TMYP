@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import gsap from 'gsap';
 
@@ -9,11 +9,8 @@ interface IntroLoaderProps {
 
 const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLDivElement>(null);
-  const subTextRef = useRef<HTMLDivElement>(null);
-  const [text, setText] = useState("LOADING..."); 
-  const [subText, setSubText] = useState("");
-
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -27,12 +24,13 @@ const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete }) => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     
-    // Force canvas to be behind text
+    // Configurar Canvas
     renderer.domElement.style.position = 'absolute';
     renderer.domElement.style.top = '0';
     renderer.domElement.style.left = '0';
-    renderer.domElement.style.zIndex = '0';
+    renderer.domElement.style.zIndex = '10';
     
+    canvasRef.current = renderer.domElement;
     containerRef.current.appendChild(renderer.domElement);
 
     // --- 2. THE NEURAL CORE (Shader Material) ---
@@ -44,6 +42,7 @@ const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete }) => {
       varying vec3 vNormal;
       varying float vDisplace;
 
+      // Simplex noise function
       vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
       vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
       vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -171,59 +170,20 @@ const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete }) => {
       }
     });
 
-    // --- LOGICA DE SCRAMBLE TEXT ---
-    const scrambleText = (finalText: string) => {
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789$#@%&*";
-        let iterations = 0;
-        
-        const interval = setInterval(() => {
-            const scrambled = finalText
-                .split("")
-                .map((char, index) => {
-                    if (index < iterations) {
-                        return finalText[index];
-                    }
-                    return chars[Math.floor(Math.random() * chars.length)];
-                })
-                .join("");
+    // 1. Entrada de la Bola Inmediata
+    tl.fromTo(core.scale, 
+        { x: 0.01, y: 0.01, z: 0.01 }, 
+        { x: 1, y: 1, z: 1, duration: 2.0, ease: "elastic.out(1, 0.5)" }
+    );
 
-            setText(scrambled);
+    // 2. Pequeña pausa girando
+    tl.to(core.rotation, { y: Math.PI * 2, duration: 1.5, ease: "none" }, "<");
 
-            if (iterations >= finalText.length) {
-                clearInterval(interval);
-                setText(finalText); 
-            }
-            
-            // SPEED UP: Increase by 2 chars per frame to reveal quickly (approx 0.3s total)
-            iterations += 2; 
-        }, 30); 
-    };
-
-    // --- TIMELINE EVENTS ---
-    // Ensure visible text duration is at least 1.5s
+    // 3. Explosión / Transición a la App
+    tl.to(core.scale, { x: 60, y: 60, z: 60, duration: 0.8, ease: "expo.in" }, "+=0.2");
+    tl.to(material.uniforms.uColor1.value, { r: 1, g: 1, b: 1, duration: 0.3 }, "-=0.6");
+    tl.to(material.uniforms.uColor2.value, { r: 1, g: 1, b: 1, duration: 0.3 }, "-=0.6");
     
-    // 0s: Init scale
-    tl.set(core.scale, { x: 0.1, y: 0.1, z: 0.1 });
-    
-    // 0.1s: Core Explosion
-    tl.to(core.scale, { x: 1, y: 1, z: 1, duration: 1.5, ease: "elastic.out(1, 0.5)" }, 0.1);
-    
-    // 0.1s: Text Fade In & Scramble (IMMEDIATE START)
-    tl.call(() => {
-        setSubText("CREADO POR");
-        gsap.to(subTextRef.current, { opacity: 1, duration: 0.5 });
-        gsap.to(textRef.current, { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.2 });
-        scrambleText("SANTINO V. & DANTE G.");
-    }, undefined, 0.1);
-
-    // 2.0s: Flashbang start (Giving ~1.9s of text presence, ~1.6s fully readable)
-    tl.to(core.scale, { x: 50, y: 50, z: 50, duration: 0.6, ease: "expo.in" }, 2.0);
-    tl.to(material.uniforms.uColor1.value, { r: 1, g: 1, b: 1, duration: 0.2 }, 2.0);
-    tl.to(material.uniforms.uColor2.value, { r: 1, g: 1, b: 1, duration: 0.2 }, 2.0);
-    
-    // Fade out text just as flashbang hits
-    tl.to([textRef.current, subTextRef.current], { opacity: 0, duration: 0.2 }, 2.0);
-
     const handleResize = () => {
         const w = window.innerWidth;
         const h = window.innerHeight;
@@ -247,34 +207,7 @@ const IntroLoader: React.FC<IntroLoaderProps> = ({ onComplete }) => {
     <div 
       ref={containerRef} 
       className="fixed inset-0 z-[9999] bg-black flex flex-col items-center justify-center overflow-hidden"
-    >
-        {/* TEXT OVERLAY */}
-        <div className="absolute z-[10000] flex flex-col items-center justify-center text-center w-full px-4 pointer-events-none">
-             
-             {/* SUBTEXT */}
-             <div 
-                ref={subTextRef}
-                className="font-body text-accent text-xs md:text-sm tracking-[0.5em] uppercase mb-4 font-bold opacity-0"
-                style={{ textShadow: '0 2px 10px rgba(0,0,0,1)' }}
-             >
-                {subText}
-             </div>
-
-             {/* MAIN NAMES - High Contrast */}
-             <div 
-                ref={textRef}
-                className="font-title font-black text-3xl md:text-6xl text-white tracking-wider opacity-0 transform scale-95"
-                style={{ 
-                    textShadow: '0 0 10px rgba(0,0,0,1), 0 0 20px rgba(0,0,0,0.8), 0 0 40px rgba(99,102,241,0.5)' 
-                }}
-             >
-                {text}
-             </div>
-
-             {/* Decorative Elements */}
-             <div className="w-32 h-[1px] bg-gradient-to-r from-transparent via-white/50 to-transparent mt-8 rounded-full opacity-50" />
-        </div>
-    </div>
+    />
   );
 };
 

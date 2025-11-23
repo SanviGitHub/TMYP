@@ -17,12 +17,17 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
   const pulseRingRef = useRef<THREE.Mesh | null>(null);
   const starsRef = useRef<THREE.Points | null>(null);
   const dustRef = useRef<THREE.Points | null>(null);
+  const warpDebrisRef = useRef<THREE.Points | null>(null); 
   const mainGroupRef = useRef<THREE.Group | null>(null);
 
   // Animation Refs
-  const rotationSpeedRef = useRef(1.0); // Multiplier for base rotation
-  const volatilityRef = useRef(0.0); // Amount of chaos/vertex displacement
+  const rotationSpeedRef = useRef(1.0); 
+  const volatilityRef = useRef(0.0); 
   const previousMoodColor = useRef<string | null>(null);
+
+  // To track star positions for the warp effect
+  const starGeoRef = useRef<THREE.BufferGeometry | null>(null);
+  const debrisGeoRef = useRef<THREE.BufferGeometry | null>(null);
 
   const [isMobileState, setIsMobileState] = useState(false);
 
@@ -31,18 +36,15 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     varying vec2 vUv; varying vec3 vNormal; 
     uniform float uTime; 
     uniform float uTalk; 
-    uniform float uVolatility; // Chaos factor
+    uniform float uVolatility; 
 
     void main() { 
       vUv = uv; 
       vNormal = normal; 
       
-      // Deformación orgánica basada en voz
       float breath = sin(uTime * 0.5) * 0.03; 
       float speech = sin(position.y * 8.0 + uTime * 20.0) * uTalk * 0.08; 
       
-      // Deformación caótica (Volatility)
-      // Crea picos agudos y movimiento rápido cuando uVolatility es alto
       float chaos = sin(position.x * 15.0 + uTime * 40.0) * cos(position.z * 15.0 + uTime * 35.0) * uVolatility * 0.3;
       
       vec3 newPos = position + normal * (breath + speech + chaos); 
@@ -53,19 +55,16 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
   const fragmentShader = `
     varying vec3 vNormal; uniform vec3 uColor; uniform float uTime;
     void main() { 
-      // Efecto fresnel para borde brillante
       float intensity = pow(0.65 - dot(vNormal, vec3(0, 0, 1.0)), 2.5); 
-      // Pulso interno sutil
       float pulse = 0.8 + 0.2 * sin(uTime * 2.0);
       gl_FragColor = vec4(uColor, 1.0) * intensity * pulse * 2.5; 
     }
   `;
 
-  // Control de Transición de Color y Animación Compleja (Mood Change)
+  // Control de Transición de Color y Animación (Mood Change)
   useEffect(() => {
     if (!materialRef.current || !mainGroupRef.current) return;
 
-    // Check if it's the first render
     if (previousMoodColor.current === null) {
         materialRef.current.uniforms.uColor.value.set(moodColor);
         if (pulseRingRef.current) {
@@ -75,49 +74,41 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
         return;
     }
 
-    // Only animate if color actually changed
     if (previousMoodColor.current !== moodColor) {
-        // --- ANIMATION SEQUENCE ---
-        // 1. High Speed Spin & Chaos (1.5s)
-        // 2. Calm Down (1s)
-        // 3. Implode/Recreate (Explosion feel)
-
         const tl = gsap.timeline();
         
-        // Trigger Audio: Spin Up
         audioService.playSpinUp();
 
-        // Phase 1: Chaos (0s -> 1.5s)
-        tl.to(rotationSpeedRef, { current: 25.0, duration: 1.5, ease: "power3.in" }, 0);
-        tl.to(volatilityRef, { current: 1.0, duration: 1.5, ease: "power2.in" }, 0);
+        tl.to(rotationSpeedRef, { current: 30.0, duration: 1.5, ease: "power3.in" }, 0);
+        tl.to(volatilityRef, { current: 1.2, duration: 1.5, ease: "power2.in" }, 0);
         
-        // Phase 2: Calm (1.5s -> 2.5s)
         tl.call(() => audioService.playCalmDown(), undefined, 1.5);
         
         tl.to(rotationSpeedRef, { current: 0.2, duration: 1.0, ease: "power2.out" }, 1.5);
         tl.to(volatilityRef, { current: 0.0, duration: 1.0, ease: "power2.out" }, 1.5);
-        // Shrink slightly in anticipation
         tl.to(mainGroupRef.current.scale, { x: 0.01, y: 0.01, z: 0.01, duration: 1.0, ease: "back.in(1.5)" }, 1.5);
 
-        // Phase 3: Switch Color & Explode/Rebirth (2.5s)
         tl.call(() => {
             if (materialRef.current) materialRef.current.uniforms.uColor.value.set(moodColor);
             if (pulseRingRef.current) {
                  (pulseRingRef.current.material as THREE.MeshBasicMaterial).color.set(moodColor);
             }
-            // Trigger Audio: Explosion
             audioService.playExplosion();
         }, undefined, 2.5);
 
-        // Rebirth (Explosion outwards)
         tl.to(mainGroupRef.current.scale, { x: 1, y: 1, z: 1, duration: 0.8, ease: "elastic.out(1, 0.5)" }, 2.5);
-        
-        // Normalize Rotation
         tl.to(rotationSpeedRef, { current: 1.0, duration: 1.5, ease: "power1.out" }, 2.5);
 
         previousMoodColor.current = moodColor;
     }
   }, [moodColor]);
+
+  // Handle Zen Audio
+  useEffect(() => {
+      if (isZen !== undefined) {
+          audioService.setZenMode(isZen);
+      }
+  }, [isZen]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -130,7 +121,7 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x0b0c15, isMobile ? 0.02 : 0.01); 
 
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
+    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 2000); 
     
     const renderer = new THREE.WebGLRenderer({ 
         alpha: true, 
@@ -170,6 +161,8 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     
     materialRef.current = mat;
     const sphere = new THREE.Mesh(geo, mat);
+    // Ensure sphere itself is centered in group
+    sphere.position.set(0, 0, 0); 
     mainGroup.add(sphere);
 
     // --- 2. Pulse Ring (Saturno) ---
@@ -183,43 +176,39 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
     pulseRingRef.current = pulseRing;
     mainGroup.add(pulseRing);
 
-    // --- 3. Particle Systems (Dust & Stars) ---
+    // --- 3. Particle Systems ---
+    
+    // A. Ambient Dust
     const dustCount = isMobile ? 60 : 600; 
     const dustGeo = new THREE.BufferGeometry();
     const dustPos = [];
     for(let i=0; i<dustCount; i++) {
-        const x = (Math.random() - 0.5) * 50;
-        const y = (Math.random() - 0.5) * 50;
-        const z = (Math.random() - 0.5) * 50;
-        dustPos.push(x, y, z);
+        dustPos.push((Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50, (Math.random() - 0.5) * 50);
     }
     dustGeo.setAttribute('position', new THREE.Float32BufferAttribute(dustPos, 3));
-    const dustMat = new THREE.PointsMaterial({
-        color: 0xffffff, 
-        size: 0.05, 
-        transparent: true, 
-        opacity: 0.2
-    });
+    const dustMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.05, transparent: true, opacity: 0.2 });
     const dust = new THREE.Points(dustGeo, dustMat);
     dustRef.current = dust;
     scene.add(dust);
 
-    const starCount = isMobile ? 40 : 120;
+    // B. Universe Stars
+    const starCount = isMobile ? 150 : 800; 
     const starGeo = new THREE.BufferGeometry();
-    const starPos = [];
-    const starSizes = [];
+    const starPos = new Float32Array(starCount * 3);
+    const starSizes = new Float32Array(starCount);
+    
     for(let i=0; i<starCount; i++) {
-        const r = 10 + Math.random() * 30;
+        const r = 10 + Math.random() * 80; 
         const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos(2 * Math.random() - 1);
-        const x = r * Math.sin(phi) * Math.cos(theta);
-        const y = r * Math.sin(phi) * Math.sin(theta);
-        const z = r * Math.cos(phi);
-        starPos.push(x, y, z);
-        starSizes.push(0.5 + Math.random() * 1.0); 
+        starPos[i*3] = r * Math.cos(theta); 
+        starPos[i*3+1] = r * Math.sin(theta);
+        starPos[i*3+2] = (Math.random() - 0.5) * 400; 
+        starSizes[i] = 0.5 + Math.random() * 1.5; 
     }
-    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
-    starGeo.setAttribute('size', new THREE.Float32BufferAttribute(starSizes, 1));
+    
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+    starGeoRef.current = starGeo;
 
     const starShaderMat = new THREE.ShaderMaterial({
         uniforms: { uTime: { value: 0 } },
@@ -230,9 +219,9 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
             void main() {
                 vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
                 gl_Position = projectionMatrix * mvPosition;
-                float twinkle = 0.6 + 0.4 * sin(uTime * 2.0 + position.x * 10.0);
+                float twinkle = 0.6 + 0.4 * sin(uTime * 5.0 + position.x * 10.0);
                 vAlpha = twinkle;
-                gl_PointSize = size * (200.0 / -mvPosition.z);
+                gl_PointSize = size * (300.0 / -mvPosition.z);
             }
         `,
         fragmentShader: `
@@ -241,20 +230,47 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
                 vec2 xy = gl_PointCoord.xy - vec2(0.5);
                 float dist = length(xy);
                 if(dist > 0.5) discard;
-                float glow = 1.0 - (dist * 2.0);
-                glow = pow(glow, 3.0); 
-                gl_FragColor = vec4(1.0, 1.0, 1.0, vAlpha * glow); 
+                gl_FragColor = vec4(1.0, 1.0, 1.0, vAlpha * (1.0 - dist * 2.0)); 
             }
         `,
         transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
     });
-
     const stars = new THREE.Points(starGeo, starShaderMat);
     starsRef.current = stars;
     scene.add(stars);
 
-    camera.position.z = 6;
+    // C. Warp Debris
+    const debrisCount = isMobile ? 40 : 100;
+    const debrisGeo = new THREE.BufferGeometry();
+    const debrisPos = new Float32Array(debrisCount * 3);
+    
+    for(let i=0; i<debrisCount; i++) {
+        const r = 5 + Math.random() * 30; 
+        const theta = Math.random() * Math.PI * 2;
+        debrisPos[i*3] = r * Math.cos(theta);
+        debrisPos[i*3+1] = r * Math.sin(theta);
+        debrisPos[i*3+2] = (Math.random() - 0.5) * 400;
+    }
+    debrisGeo.setAttribute('position', new THREE.BufferAttribute(debrisPos, 3));
+    debrisGeoRef.current = debrisGeo;
 
+    const debrisMat = new THREE.PointsMaterial({ 
+        color: 0xaaccff, 
+        size: 0.3, 
+        transparent: true, 
+        opacity: 0, 
+        blending: THREE.AdditiveBlending 
+    });
+    const debris = new THREE.Points(debrisGeo, debrisMat);
+    warpDebrisRef.current = debris;
+    scene.add(debris);
+
+
+    camera.position.z = 6;
+    
+    // IMPORTANT: Do NOT set sphere.position.y here based on mobile. 
+    // We control position via mainGroup in the loop to avoid double offsets.
+    
     const clock = new THREE.Clock();
     let reqId: number;
 
@@ -272,52 +288,103 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
       const targetTalk = isTalkingRef.current ? 2.0 : 0;
       mat.uniforms.uTalk.value += (targetTalk - mat.uniforms.uTalk.value) * 0.15;
 
-      // 1. MAIN SPHERE BEHAVIOR
-      if (mainGroupRef.current) {
-          mainGroupRef.current.position.y = Math.sin(t * 0.5) * 0.1;
-          
-          // Apply Rotation with Multiplier (rotationSpeedRef)
-          const baseSpeed = zen ? 0.002 : 0.005;
-          const rotationDelta = baseSpeed * rotationSpeedRef.current;
-          
-          mainGroupRef.current.rotation.y += rotationDelta;
-          mainGroupRef.current.rotation.z += rotationDelta * 0.5;
+      // --- MOBILE SPECIFIC LOGIC ---
+      if (pulseRingRef.current) {
+         // HIDE RING ON MOBILE
+         pulseRingRef.current.visible = !isMobileState;
+      }
 
+      // 1. SPHERE & GROUP BEHAVIOR
+      if (mainGroupRef.current) {
+          // Calculate Center Position for Mobile
+          // Mobile Top area is approx 45% of height. 
+          // 2.2 puts it nicely in the visual center of that space.
+          const baseY = isMobileState ? 2.2 : 0; 
+          mainGroupRef.current.position.y = baseY + Math.sin(t * 0.5) * 0.1;
+          
           if (zen) {
-               // Additional zen rotation logic
+              // ZEN MODE
+              mainGroupRef.current.rotation.x *= 0.95;
+              mainGroupRef.current.rotation.z *= 0.95; 
+              mainGroupRef.current.rotation.y += 0.05;
           } else {
-              if (isThinkingRef.current) {
-                  sphere.rotation.y += 0.1;
-                  mat.opacity = 0.8 + Math.sin(t * 10.0) * 0.1;
-              } else {
-                  sphere.rotation.y = t * 0.1;
-                  sphere.rotation.x = Math.sin(t * 0.5) * 0.1;
-                  // Recover opacity if not thinking
-                  mat.opacity += (0.6 - mat.opacity) * 0.05;
-              }
+              // NORMAL MODE
+              const baseSpeed = 0.005;
+              const rotationDelta = baseSpeed * rotationSpeedRef.current;
+              mainGroupRef.current.rotation.y += rotationDelta;
+              mainGroupRef.current.rotation.z += rotationDelta * 0.5;
           }
       }
 
-      // 2. RING BEHAVIOR
-      if (pulseRingRef.current) {
+      // 2. PULSE RING (Only visual effects, visibility handled above)
+      if (pulseRingRef.current && pulseRingRef.current.visible) {
          pulseRingRef.current.rotation.x = Math.PI / 2 + Math.sin(t * 0.3) * 0.15;
          pulseRingRef.current.scale.setScalar(1 + Math.sin(t * 1.5) * 0.03);
       }
 
-      // 3. STARS & DUST ANIMATION
-      if (starsRef.current && dustRef.current) {
-          const speed = (zen ? 0.02 : 0.005) * rotationSpeedRef.current; // Sync background speed with chaos
-          starsRef.current.rotation.y -= speed;
-          dustRef.current.rotation.y -= speed * 0.5;
-          dustRef.current.position.y = Math.sin(t * 0.2) * 0.5;
+      // 3. STARS (WARP EFFECT)
+      if (starGeoRef.current && starsRef.current) {
+          const positions = starGeoRef.current.attributes.position.array as Float32Array;
+          const count = positions.length / 3;
+          
+          if (zen) {
+              const speed = 3.5; 
+              for (let i = 0; i < count; i++) {
+                  positions[i * 3 + 2] += speed;
+                  if (positions[i * 3 + 2] > 50) {
+                      positions[i * 3 + 2] = -300; 
+                  }
+              }
+              starGeoRef.current.attributes.position.needsUpdate = true;
+              starsRef.current.rotation.y = 0;
+          } else {
+              starsRef.current.rotation.y -= 0.001;
+          }
       }
 
-      // 4. CAMERA BEHAVIOR
-      const targetZ = isMobile ? 7.5 : 6.0;
-      const zenZ = targetZ + (isMobile ? 1.5 : 3.0); 
-      const finalZ = zen ? zenZ : targetZ;
+      // 4. WARP DEBRIS
+      if (warpDebrisRef.current && debrisGeoRef.current) {
+          const positions = debrisGeoRef.current.attributes.position.array as Float32Array;
+          const count = positions.length / 3;
+
+          if (zen) {
+             (warpDebrisRef.current.material as THREE.PointsMaterial).opacity = 0.6;
+             const speed = 6.0; 
+             for (let i = 0; i < count; i++) {
+                  positions[i * 3 + 2] += speed;
+                  if (positions[i * 3 + 2] > 60) {
+                      positions[i * 3 + 2] = -300;
+                      const r = 5 + Math.random() * 40;
+                      const theta = Math.random() * Math.PI * 2;
+                      positions[i * 3] = r * Math.cos(theta);
+                      positions[i * 3 + 1] = r * Math.sin(theta);
+                  }
+             }
+             debrisGeoRef.current.attributes.position.needsUpdate = true;
+          } else {
+             (warpDebrisRef.current.material as THREE.PointsMaterial).opacity = 0;
+          }
+      }
       
-      camera.position.z += (finalZ - camera.position.z) * 0.02;
+      // 5. DUST
+      if (dustRef.current) {
+          if (zen) {
+               dustRef.current.position.z += 1.0;
+               if (dustRef.current.position.z > 20) dustRef.current.position.z = -50;
+          } else {
+              dustRef.current.rotation.y -= 0.002;
+              dustRef.current.position.y = Math.sin(t * 0.2) * 0.5;
+          }
+      }
+
+      // 6. CAMERA
+      if (zen) {
+          camera.position.x = 0;
+          camera.position.y = 0;
+      } else {
+          camera.position.x = Math.sin(t * 0.2) * 0.2;
+          camera.position.y = Math.cos(t * 0.3) * 0.2;
+      }
       
       renderer.render(scene, camera);
     };
@@ -335,15 +402,11 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
       renderer.setSize(w, h);
       renderer.setPixelRatio(mobile ? 1 : Math.min(window.devicePixelRatio, 2));
       
-      if (mobile) {
-        sphere.position.y = 0.8; 
-      } else {
-        sphere.position.y = 0;
-      }
+      // Removed manual position set here to let animate loop handle it
     };
     
     window.addEventListener('resize', handleResize);
-    handleResize(); // Init
+    handleResize(); 
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -351,16 +414,17 @@ const TheBola: React.FC<TheBolaProps> = ({ isTalking, isThinking, moodColor, isZ
       if(containerRef.current && renderer.domElement) {
         containerRef.current.removeChild(renderer.domElement);
       }
-      geo.dispose(); mat.dispose(); dustGeo.dispose(); dustMat.dispose(); starGeo.dispose(); starShaderMat.dispose();
+      geo.dispose(); mat.dispose(); 
+      dustGeo.dispose(); dustMat.dispose(); 
+      starGeo.dispose(); starShaderMat.dispose();
+      debrisGeo.dispose(); debrisMat.dispose();
     };
   }, []);
 
   const isTalkingRef = useRef(isTalking);
-  const isThinkingRef = useRef(isThinking);
   const isZenRef = useRef(isZen);
   
   useEffect(() => { isTalkingRef.current = isTalking; }, [isTalking]);
-  useEffect(() => { isThinkingRef.current = isThinking; }, [isThinking]);
   useEffect(() => { isZenRef.current = isZen; }, [isZen]);
 
   return (

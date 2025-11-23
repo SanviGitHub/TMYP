@@ -8,10 +8,12 @@ import SOSModal from './components/SOSModal';
 import BreathingModal from './components/BreathingModal';
 import MoodSelector from './components/MoodSelector';
 import FocusModal from './components/FocusModal';
+import SoundSettingsModal from './components/SoundSettingsModal';
 import DailyChallenge from './components/DailyChallenge';
 import UpdateChecker from './components/UpdateChecker';
 import TutorialOverlay from './components/TutorialOverlay'; 
 import IntroLoader from './components/IntroLoader';
+import JournalModal from './components/JournalModal'; // NEW
 import { Message, MoodOption } from './types';
 import { QUOTES, MOODS } from './constants';
 import { sendMessageToAI } from './services/aiService';
@@ -52,19 +54,29 @@ const App: React.FC = () => {
   const [isThinking, setIsThinking] = useState(false); 
   const [zenMode, setZenMode] = useState(false); 
   
-  const [activeModal, setActiveModal] = useState<'vent' | 'sos' | 'breathe' | 'mood' | 'focus' | null>(null);
+  // MODAL STATE
+  const [activeModal, setActiveModal] = useState<'vent' | 'sos' | 'breathe' | 'mood' | 'focus' | 'sound' | 'journal' | null>(null);
+  
   const [currentMood, setCurrentMood] = useState<MoodOption>(MOODS[0]); 
   
   // Estado para el efecto de flash de color (Mood Transition)
   const [moodTransitionColor, setMoodTransitionColor] = useState<string | null>(null);
 
   const [quote, setQuote] = useState("Cargando paz mental...");
-  const [isMuted, setIsMuted] = useState(true);
   
   const [showTutorial, setShowTutorial] = useState(true);
   
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 1. Cleanup Effect (Only on Unmount)
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      audioService.stop(); 
+    };
+  }, []);
+
+  // 2. Quote & Zen Interval Logic
   useEffect(() => {
     setQuote(QUOTES[Math.floor(Math.random() * QUOTES.length)]);
     
@@ -75,17 +87,15 @@ const App: React.FC = () => {
     }, 15000);
 
     return () => {
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       clearInterval(quoteInterval);
-      audioService.stop(); 
     };
   }, [zenMode]);
 
   useEffect(() => {
-    if (!isMuted && !showTutorial && !isLoading) {
+    if (!showTutorial && !isLoading) {
         audioService.updateMood(currentMood.id);
     }
-  }, [currentMood, isMuted, showTutorial, isLoading]);
+  }, [currentMood, showTutorial, isLoading]);
 
   const startConversation = () => {
       typingTimeoutRef.current = setTimeout(() => {
@@ -93,13 +103,25 @@ const App: React.FC = () => {
       }, 800);
   };
 
-  const handleToggleSound = async () => {
-    const newMuteState = audioService.toggle();
-    setIsMuted(newMuteState);
-  };
-
   const handleTutorialClick = () => {
       setActiveModal('mood');
+  };
+
+  // --- SAVE MOOD TO JOURNAL ---
+  const saveMoodToHistory = (mood: MoodOption) => {
+    try {
+        const entry = {
+            date: new Date().toLocaleDateString(),
+            moodId: mood.id,
+            timestamp: Date.now()
+        };
+        const existingRaw = localStorage.getItem('iym_mood_history');
+        const history = existingRaw ? JSON.parse(existingRaw) : [];
+        history.push(entry);
+        localStorage.setItem('iym_mood_history', JSON.stringify(history));
+    } catch(e) {
+        console.warn("Storage quota exceeded or disabled");
+    }
   };
 
   const handleMoodChange = (mood: MoodOption) => {
@@ -111,11 +133,11 @@ const App: React.FC = () => {
 
     setCurrentMood(mood);
     setActiveModal(null);
+    saveMoodToHistory(mood); // Save to Journal
     
     if (showTutorial) {
         setShowTutorial(false);
         audioService.start(); 
-        setIsMuted(false);
         startConversation();
     }
     
@@ -142,7 +164,7 @@ const App: React.FC = () => {
       setMessages(prev => [...prev, { role: 'assistant', content: '', timestamp: msgTimestamp }]);
       
       let i = 0;
-      const speed = 20; 
+      const speed = 25; 
       
       const typeChar = () => {
         setMessages(prev => {
@@ -156,8 +178,7 @@ const App: React.FC = () => {
           return newArr;
         });
 
-        // TRIGGER AUDIO EVERY 3 CHARACTERS TO AVOID MACHINE GUN EFFECT
-        if (i % 3 === 0) {
+        if (i % 3 === 0 || Math.random() > 0.8) {
             audioService.playTypingSound();
         }
 
@@ -207,7 +228,8 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="relative w-full h-screen overflow-hidden bg-bg text-gray-100 font-body selection:bg-primary/30">
+    // Use h-[100dvh] for mobile viewport fix
+    <div className="relative w-full h-[100dvh] overflow-hidden bg-bg text-gray-100 font-body selection:bg-primary/30">
       
       {/* LOADING SEQUENCE */}
       {isLoading && (
@@ -219,7 +241,7 @@ const App: React.FC = () => {
       <AmbientAurora color={currentMood.threeColor} />
       <div className="fixed inset-0 bg-gradient-to-b from-[#0b0c15]/20 via-transparent to-[#0b0c15]/60 z-0 pointer-events-none" />
       
-      {/* MOOD FLASH TRANSITION: Una capa que se inunda de color y se desvanece */}
+      {/* MOOD FLASH TRANSITION */}
       <div 
         className="fixed inset-0 z-[150] pointer-events-none transition-opacity duration-700 ease-out mix-blend-screen"
         style={{ 
@@ -248,9 +270,9 @@ const App: React.FC = () => {
             onReset={handleReset}
             onSOS={() => setActiveModal('sos')}
             onMood={handleTutorialClick} 
-            onToggleSound={handleToggleSound}
+            onSoundSettings={() => setActiveModal('sound')} 
             onToggleZen={() => setZenMode(!zenMode)} 
-            isMuted={isMuted}
+            onJournal={() => setActiveModal('journal')}
             isZen={zenMode}
             highlightMood={showTutorial} 
             />
@@ -301,7 +323,6 @@ const App: React.FC = () => {
       </div>
 
       {/* 4. Modals & Overlays */}
-      {/* Don't show overlays while loading */}
       {!isLoading && (
         <>
           <TutorialOverlay isVisible={showTutorial && !activeModal} />
@@ -310,7 +331,9 @@ const App: React.FC = () => {
           <SOSModal isOpen={activeModal === 'sos'} onClose={() => setActiveModal(null)} />
           <BreathingModal isOpen={activeModal === 'breathe'} onClose={() => setActiveModal(null)} />
           <FocusModal isOpen={activeModal === 'focus'} onClose={() => setActiveModal(null)} />
-          
+          <SoundSettingsModal isOpen={activeModal === 'sound'} onClose={() => setActiveModal(null)} />
+          <JournalModal isOpen={activeModal === 'journal'} onClose={() => setActiveModal(null)} />
+
           <MoodSelector 
             isOpen={activeModal === 'mood'} 
             onClose={() => setActiveModal(null)} 
